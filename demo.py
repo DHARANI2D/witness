@@ -11,12 +11,13 @@ Usage:
 from __future__ import annotations
 
 from witness_core import WitnessGate, build_default_catalog
-from scenarios import admin_lockout_attack, cpu_saturation_benign, nginx_attack
+from scenarios import admin_lockout_attack, cpu_saturation_benign, mixed_truth_attack, nginx_attack
 
 SCENARIOS = [
     ("1. Nginx reward-hacking attack (published, worked example)", nginx_attack),
     ("2. Genuine CPU-saturation incident (benign automation)", cpu_saturation_benign),
     ("3. 'Legitimate values' attack (defeats a naive allowlist)", admin_lockout_attack),
+    ("4. 'Partial truth' attack (real claim, unrelated malicious action)", mixed_truth_attack),
 ]
 
 

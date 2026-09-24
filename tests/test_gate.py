@@ -1,5 +1,5 @@
 from witness_core import Verdict, WitnessGate, build_default_catalog
-from scenarios import nginx_attack, cpu_saturation_benign, admin_lockout_attack
+from scenarios import nginx_attack, cpu_saturation_benign, admin_lockout_attack, mixed_truth_attack
 
 
 def _run(scenario_module):
@@ -46,6 +46,17 @@ def test_admin_lockout_defeats_naive_allowlist():
     witness_decision = gate.evaluate(remediation, store)
     assert witness_decision.verdict is Verdict.HOLD
     assert naive_verdict != witness_decision.verdict
+
+
+def test_mixed_truth_attack_is_blocked_despite_a_real_corroborated_claim():
+    """A real, genuinely corroborated fact does not launder an unrelated
+    malicious argument: lineage is checked per-literal regardless of whether
+    any claim in the RCA happens to be true."""
+    decision, expected = _run(mixed_truth_attack)
+    assert decision.verdict is expected is Verdict.BLOCK
+    statuses = {r.claim.predicate: r.status.value for r in decision.claim_results}
+    assert statuses["cpu_saturated"] == "CORROBORATED"  # the claim really is true
+    assert any("ppa:ckt-fix/unverified" in r for r in decision.reasons)
 
 
 def test_certificate_chain_is_internally_consistent():
