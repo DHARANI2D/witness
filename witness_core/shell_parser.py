@@ -180,6 +180,13 @@ _FIREWALL = re.compile(r"^(sudo\s+)?(iptables|ip6tables|ufw|firewall-cmd)\b")
 _IDENTITY = re.compile(r"^(sudo\s+)?(useradd|userdel|usermod|passwd|chpasswd|adduser|deluser)\b")
 _LOCK_ACCOUNT = re.compile(r"usermod\s+(-L|--lock)\s+(?P<user>\S+)|passwd\s+-l\s+(?P<user2>\S+)")
 
+# Plain-Docker deployments (AIOpsLab's own "namespace == docker" mode, and
+# this repo's docker-compose live environment) mutate containers directly
+# instead of through kubectl.
+_DOCKER_MUTATION = re.compile(
+    r"^(sudo\s+)?docker\s+(compose\s+)?(?P<verb>restart|stop|start|kill|rm|update|exec|pause|unpause)\b(?P<rest>.*)$"
+)
+
 _MUTATION_HINT = re.compile(
     r"\b(apt|apt-get|yum|dnf|pip|pip3|kubectl|docker|systemctl|service|chmod|chown|rm|mv|cp|"
     r"useradd|userdel|usermod|passwd|chpasswd|iptables|ufw|firewall-cmd|sed|ssh|scp|curl|wget)\b"
@@ -259,6 +266,22 @@ def classify_subcommand(sub: str) -> ClassifiedCommand:
             sub, read_only=False,
             action=RemediationAction(verb="restart_service", target=m.group("service"), arguments={"service": m.group("service")}),
         )
+
+    # -- plain-Docker container mutations --
+    m = _DOCKER_MUTATION.match(sub)
+    if m:
+        docker_verb_map = {
+            "restart": "restart_service", "stop": "stop_service", "start": "start_service",
+            "kill": "kill_service", "rm": "remove_container", "update": "update_container",
+            "exec": "container_exec", "pause": "pause_service", "unpause": "unpause_service",
+        }
+        verb = docker_verb_map[m.group("verb")]
+        tokens = [t for t in _safe_tokens(m.group("rest")) if not t.startswith("-")]
+        container = tokens[0] if tokens else m.group("rest").strip()
+        args = {"container": container}
+        if verb == "container_exec" and len(tokens) > 1:
+            args["command"] = " ".join(tokens[1:])
+        return ClassifiedCommand(sub, read_only=False, action=RemediationAction(verb=verb, target=container, arguments=args))
 
     # -- TLS / config edits via sed or redirect touching TLS-flavoured paths --
     if _SED_OR_PATCH.match(sub) and _TLS_KEYWORDS.search(sub):

@@ -183,3 +183,30 @@ def test_completely_novel_command_defaults_to_gated_not_admitted():
     result = classify_subcommand("some_custom_binary --do-the-dangerous-thing")
     assert result.read_only is False
     assert result.action.verb == "shell_mutation"
+
+
+# --- plain-Docker mutations (AIOpsLab's own "docker" deployment mode) ---
+
+def test_docker_restart_is_restart_service():
+    result = classify_subcommand("docker restart hotel-rate")
+    assert result.read_only is False
+    assert result.action.verb == "restart_service"
+    assert result.action.arguments["container"] == "hotel-rate"
+
+
+def test_docker_stop_is_stop_service():
+    result = classify_subcommand("docker stop hotel-rate")
+    assert result.action.verb == "stop_service"
+    assert result.action.target == "hotel-rate"
+
+
+def test_docker_exec_captures_container_and_command():
+    result = classify_subcommand("docker exec hotel-rate sh -c 'echo hi'")
+    assert result.action.verb == "container_exec"
+    assert result.action.arguments["container"] == "hotel-rate"
+
+
+def test_docker_ps_and_logs_and_stats_are_read_only():
+    assert classify_subcommand("docker ps -a").read_only is True
+    assert classify_subcommand("docker logs hotel-rate --tail 50").read_only is True
+    assert classify_subcommand("docker stats --no-stream").read_only is True

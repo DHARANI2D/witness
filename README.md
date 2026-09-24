@@ -1,4 +1,4 @@
-# WITNESS — a working admission gate, wired to real AIOpsLab
+# WITNESS — a working admission gate, wired to real AIOpsLab and a live environment
 
 This repository implements the deterministic core of the *WITNESS:
 Unforgeable Corroboration for Safe Autonomous Remediation* abstract —
@@ -59,11 +59,18 @@ adapters/                          real AIOpsLab integration (imports witness_co
   session.py           WitnessSession + install_witness_gate(): the actual
                         monkeypatch onto TaskActions.exec_shell / ResponseParser.parse
 
+  live_docker_telemetry.py   real telemetry from the docker-compose live
+                        environment: docker stats + a direct cgroup read
+                        as two independent CPU witnesses, docker logs as EXT
+
 scenarios/            3 hand-built EvidenceStore fixtures exercising witness_core directly
+live_env/              docker-compose HotelReservation (real containers, no k8s) + results/
 demo.py               runs the 3 scenarios against witness_core only
 demo_aiopslab.py       runs the same 3 narratives through the REAL AIOpsLab classes
-tests/                 90 assertions across 4 files (engine, shell parser, adapters, live integration)
+tests/                 63 tests across 5 files (engine, shell parser, adapters, live AIOpsLab integration)
 scripts/setup_aiopslab_dev.sh   clones AIOpsLab and prepares it for import (no cluster needed)
+scripts/pilot_trial_matrix.py   the 12-trial live pilot behind Table 1 below
+scripts/benchmark_latency.py    the pure-Python gate latency benchmark
 ```
 
 Decision flow inside `WitnessGate.evaluate`:
@@ -127,7 +134,7 @@ exporter families, is admitted and reaches real command execution.
 # The deterministic engine alone (no AIOpsLab needed):
 python3 demo.py
 pip install -r requirements-dev.txt
-python3 -m pytest -v                              # 59 tests, stdlib-only
+python3 -m pytest -v                              # 63 tests, stdlib-only
 
 # Wired to the real AIOpsLab classes:
 ./scripts/setup_aiopslab_dev.sh                   # clones AIOpsLab, no cluster needed
@@ -143,26 +150,84 @@ nothing here ever issues a real API call against it), and installs
 AIOpsLab's core Python dependencies. **No Kubernetes cluster, Prometheus,
 or Elasticsearch is required to run any test in this repository.**
 
-## Honest scope: what's real, what's still needed for a live cluster run
+## Live environment
+
+`live_env/` runs AIOpsLab's actual HotelReservation microservice app
+(18 real containers: Go/gRPC services, MongoDB, Consul, Jaeger,
+Memcached) directly under Docker, gated by the same real
+`adapters/session.install_witness_gate` hook used against the plain
+AIOpsLab checkout above. A `kind`-based Kubernetes cluster was attempted
+first and is documented in full in `live_env/README.md`, including a
+real bug found and fixed along the way (a `cgroupns-mode` default) and
+the precise, systematically-diagnosed nesting limit in this sandbox that
+stopped a full cluster short of it. This environment is the real,
+live fallback — not a synthetic stand-in: real containers, real CPU
+faults, real telemetry from two independently-computed measurement
+paths, real command execution.
+
+```bash
+cd live_env && docker compose up -d          # brings up the real app
+cd .. && PYTHONPATH=. python3 scripts/pilot_trial_matrix.py
+PYTHONPATH=. python3 scripts/benchmark_latency.py --trials 3000
+```
+
+## Table 1 (real measurements, honestly scoped)
+
+**Read this before citing these numbers anywhere.** The abstract's
+Table 1 describes ASR/utility measured across 180 trials driven by
+autonomous GPT-4o/GPT-4.1 agents against the released attack tool. This
+environment has no OpenAI/Azure API key, so that exact benchmark could
+not run here. What follows instead: every command below genuinely
+executed against the live environment above, through the real
+`TaskActions.exec_shell`, but the RCA text and proposed commands were
+authored by Claude Sonnet 5 (this session) acting directly as the
+reasoning agent, over 12 trials (small-N by construction, not sampled
+from a larger pool). Treat this as a real pilot, not a reproduction of
+the paper's figure.
+
+| Configuration | Attack Success Rate | Benign utility | Legit-values attacks held |
+|---|---|---|---|
+| No defense (raw `exec_shell`, no gate) | 4/4 (100%, by construction — nothing stops it) | 4/4 (100%) | 0/4 (100% ASR — allowlist-passable, no corroboration check) |
+| WITNESS (this work, live trial) | **0/4 (0%)** | **4/4 (100%)** | **4/4 (100%) correctly HELD** |
+
+Full per-trial output: `live_env/results/pilot_trial_results.json`
+(trial text, verdict, reasons, certificate hash, latency — all real).
+12/12 trials matched their expected verdict. The 4 benign restarts were
+independently confirmed by re-checking `docker stats` after each: CPU
+dropped from ~380-400% back to ~0.02-0.03% in every case, i.e. the
+admitted remediation genuinely fixed the genuine fault.
+
+**Latency** (`scripts/benchmark_latency.py`, 3000 trials/scenario, pure
+Python, no cluster or LLM call — this is a fair thing to benchmark in
+isolation since the gate makes no model calls of its own):
+
+| Scenario | mean | p50 | p95 | p99 |
+|---|---|---|---|---|
+| nginx_attack (BLOCK) | 0.055ms | 0.047ms | 0.082ms | 0.133ms |
+| cpu_saturation_benign (ADMIT) | 0.038ms | 0.033ms | 0.058ms | 0.094ms |
+| admin_lockout_attack (HOLD) | 0.044ms | 0.036ms | 0.068ms | 0.098ms |
+
+For scale: the published counterfactual/re-execution defenses
+(AttriGuard, MELON, CausalArmor) add **1.22x–3x relative** latency over
+an undefended agent turn — which itself takes seconds, dominated by LLM
+calls. WITNESS's own gate evaluation costs **well under a millisecond**
+in absolute terms; it makes no model calls, so there is no multiplier to
+report against an LLM round-trip. The realistic per-decision cost in a
+live deployment is dominated by *telemetry collection*, not the gate: a
+real measurement here found `docker stats --no-stream` takes **~2
+seconds per call** (the Docker Engine's own sampling window), a genuine
+finding and a concrete optimization target for a production integration
+(batch/cache stats collection or query the Engine API directly instead
+of shelling out to the CLI per witness query — this repo currently does
+the latter for simplicity).
+
+### What's still not measured, and why
 
 | Piece | Status |
 |---|---|
-| Provenance labeling, lineage checking, two-witness corroboration, certificate chain, shell-command classification | **Real, tested** (59 unit/engine tests) |
-| Binding to AIOpsLab's actual `TaskActions.exec_shell` / `ResponseParser.parse` | **Real, tested** against the unmodified upstream source (4 integration tests) |
-| AIOpsLab's real metrics-CSV and pod-log data **formats** | **Real, tested** parsers (`adapters/telemetry.py`), verified against the exact column names AIOpsLab's own `PrometheusAPI.export_all_metrics` / `log_processing_hotel_reservation` produce |
-| A live Kubernetes cluster (`kind`), live Prometheus/Elasticsearch producing that telemetry continuously during an actual benchmark run | **Not run here.** This sandbox has no container runtime available (`docker info` reports no daemon socket), so `kind`/a real cluster cannot be started in this environment. |
-| The agent's free-text RCA → closed-vocabulary claims | **Deterministic regex extraction** (`adapters/claim_extractor.py`), not a second LLM call — matches the abstract's own principle that only the first parse may involve a model. Regex extraction is necessarily narrower than a model-based paraphrase-tolerant parser; it is exact and reproducible, which a security gate should be, at the cost of missing claims phrased in genuinely novel ways. |
-| Table 1 (ASR / benign utility / false-hold rate / latency vs. four baselines across the AIOpsLab benchmark suite) | **Not measured.** That requires the live cluster above, running the released attack tool across many trials. The gate, the adapter, and the real bind-point are what this repository delivers; running the full benchmark matrix is the direct next step once a cluster is available, and needs no further changes to `witness_core/` or `adapters/` to do so. |
-
-If you have Docker-in-Docker or a real host available, the path from
-here to Table 1 is: `pip install -e .` this repo's `witness_core`
-alongside a full AIOpsLab install (with its `clients` dependency group),
-point `AIOpsLab`'s benchmark loop's `TaskActions` import at the
-gated version (`adapters.session.install_witness_gate` before the
-orchestrator starts), run the released attack tool
-(`RSAC-Labs/AIOpsDoom`) against it, and the certificates already emitted
-per decision give you ASR, false-hold rate, and detection yield directly
-from the recorded `WitnessSession.decisions`.
+| Full 180-trial ASR benchmark against the released `AIOpsDoom` attack tool, driven by GPT-4o/GPT-4.1 | **Not run.** No OpenAI/Azure API key is available in this environment. `adapters/` needs no changes to run this: point AIOpsLab's own client config at a real key and run the released attack tool against the gated `exec_shell`; every decision's certificate already gives you ASR/false-hold/detection-yield directly from `WitnessSession.decisions`. |
+| Comparison against the four literature baselines (Prompt-Guard-2, Spotlighting, AIOpsShield, a MELON-style re-execution defense) on identical trials | **Not run**, same reason — these baselines need to see the same attack trials the real benchmark runs, which needs the API-keyed agent loop above. |
+| SocialNetwork/HotelReservation on an actual Kubernetes cluster with live Prometheus/Elasticsearch, matching AIOpsLab's own deployment exactly | **Not run**, per the kind diagnosis in `live_env/README.md`. The docker-compose environment is real infrastructure but not `kubectl`-mediated; `adapters/telemetry.py`'s CSV/log-schema parsers remain ready for a real cluster's Prometheus/Elasticsearch output whenever one is available (their format-compatibility is independently tested in `tests/test_adapters_unit.py` without needing a live cluster to verify). |
 
 ## The three scenarios (pure `witness_core`, no AIOpsLab needed)
 
@@ -193,10 +258,15 @@ SYS witness, so WITNESS holds it regardless.
 `tests/test_gate.py::test_admin_lockout_defeats_naive_allowlist` makes
 the naive-allowlist comparison explicit.
 
-## Test inventory (59 tests, `python3 -m pytest -v`)
+## Test inventory (63 tests, `python3 -m pytest -v`)
 
 - `tests/test_gate.py` — the 3 scenarios end to end, certificate-chain integrity, fail-safe unknown-predicate handling
 - `tests/test_engine_upgrades.py` — class-diverse quorum, temporal staleness, fail-safe source resolution, homoglyph/zero-width lineage bypass attempts
-- `tests/test_shell_parser.py` — 27 real-shaped `exec_shell` command strings classified correctly (read-only recognition, repo/package/k8s/service/TLS/firewall/identity mutations, fail-safe fallback)
+- `tests/test_shell_parser.py` — 31 real-shaped `exec_shell` command strings classified correctly (read-only recognition, repo/package/k8s/service/docker/TLS/firewall/identity mutations, fail-safe fallback)
 - `tests/test_adapters_unit.py` — telemetry format compatibility, trusted-knowledge loading, claim extraction
 - `tests/test_aiopslab_integration.py` — binds to and drives the real, unmodified AIOpsLab classes (skips cleanly if the checkout isn't present)
+
+The live-environment pilot (`scripts/pilot_trial_matrix.py`) and latency
+benchmark (`scripts/benchmark_latency.py`) are separate from the pytest
+suite since they need `live_env/` running (or, for latency, nothing at
+all) rather than being unit tests — see Table 1 above.
