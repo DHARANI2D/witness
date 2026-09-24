@@ -1,0 +1,22 @@
+# Dependencies needed to import the real microsoft/AIOpsLab package for
+# tests/test_aiopslab_integration.py. This mirrors aiopslab's own
+# pyproject.toml core dependency group (skipping the CUDA/ML "clients"
+# group, which WITNESS's integration point never touches).
+kubernetes>=30
+prometheus-api-client>=0.5.5
+elasticsearch>=8,<9
+pandas>=2.0
+pytz
+rich
+paramiko>=3.5
+docker>=7.0
+wandb
+tiktoken
+openai
+pydantic>=2.7
+azure-identity
+fastapi
+python-dotenv
+colorama
+prompt-toolkit
+pyyaml

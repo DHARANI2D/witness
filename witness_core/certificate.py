@@ -90,7 +90,10 @@ class CertificateChain:
                     "subject": r.claim.subject,
                     "value": r.claim.value,
                     "status": r.status.value,
+                    "confidence": round(r.confidence, 3),
                     "witness_channel_ids": [w.channel_id for w in r.witnesses],
+                    "witness_channel_classes": sorted({w.channel_class for w in r.witnesses}),
+                    "note": r.note,
                 }
                 for r in claim_results
             ],
@@ -99,6 +102,8 @@ class CertificateChain:
                     "literal": r.literal,
                     "lineage": r.lineage.value,
                     "supporting_channel_ids": [e.channel_id for e in r.supporting_events],
+                    "fuzzy": r.fuzzy,
+                    "fuzzy_ratio": round(r.fuzzy_ratio, 3) if r.fuzzy_ratio is not None else None,
                 }
                 for r in lineage_results
             ],

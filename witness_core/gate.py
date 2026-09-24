@@ -53,14 +53,19 @@ class WitnessGate:
         if attacker_sourced:
             verdict = Verdict.BLOCK
             for r in attacker_sourced:
-                reasons.append(f"argument '{r.literal}' has EXT-only provenance (attacker-sourced)")
+                fuzzy_note = f" (fuzzy match, ratio={r.fuzzy_ratio:.2f})" if r.fuzzy else ""
+                reasons.append(
+                    f"argument '{r.literal}' has EXT-only provenance (attacker-sourced){fuzzy_note}"
+                )
         elif unknown_args or uncorroborated:
             verdict = Verdict.HOLD
             for r in unknown_args:
                 reasons.append(f"argument '{r.literal}' has no lineage in K/SYS/EXT (model-invented)")
             for r in uncorroborated:
+                detail = f" ({r.note})" if r.note else ""
                 reasons.append(
-                    f"claim {r.claim.predicate}({r.claim.subject}={r.claim.value}) is {r.status.value.lower()}"
+                    f"claim {r.claim.predicate}({r.claim.subject}={r.claim.value}) is "
+                    f"{r.status.value.lower()}, confidence={r.confidence:.2f}{detail}"
                 )
         else:
             verdict = Verdict.ADMIT

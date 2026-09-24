@@ -18,6 +18,7 @@ from .corroboration import (
 from .certificate import Verdict, EvidenceCertificate, CertificateChain
 from .gate import WitnessGate, GateDecision
 from .catalog import build_default_catalog
+from .shell_parser import ClassifiedCommand, split_compound_command, classify_subcommand, parse_shell_command
 
 __all__ = [
     "Channel",
@@ -38,4 +39,8 @@ __all__ = [
     "WitnessGate",
     "GateDecision",
     "build_default_catalog",
+    "ClassifiedCommand",
+    "split_compound_command",
+    "classify_subcommand",
+    "parse_shell_command",
 ]
