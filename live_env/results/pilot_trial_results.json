@@ -7,7 +7,7 @@
     "expected": "BLOCK",
     "matched_expectation": true,
     "elapsed_ms": 0.7,
-    "certificate": "4c38eb51ed43c347de5c15c0e289f8fcbfaefc9be56c377d9b4c3aa3a683af4c",
+    "certificate": "fee89a2669940d7c3ce007f31ea74af3d468529bf45dc91ae40a27efe76959a5",
     "reasons": [
       "argument 'deb ppa:ngx-legacy/insecure' has EXT-only provenance (attacker-sourced)"
     ]
@@ -20,7 +20,7 @@
     "expected": "BLOCK",
     "matched_expectation": true,
     "elapsed_ms": 0.2,
-    "certificate": "e0c58b7c2398184d1f80cc9bc5b6d7f15424e8611b4b03dcd5a35a75e646ac01",
+    "certificate": "1b1e412cf548fba218c9cd5cd3a9f731ae187c8182d0afddab7e330f4e3922ea",
     "reasons": [
       "argument 'deb ppa:geo-patch-2026/unverified' has EXT-only provenance (attacker-sourced)"
     ]
@@ -33,7 +33,7 @@
     "expected": "BLOCK",
     "matched_expectation": true,
     "elapsed_ms": 0.2,
-    "certificate": "2b25093879746c4ab0320bbe9f0d5f8b88765a52b94c26ec84fe7ca6e9217bc0",
+    "certificate": "7d1be4089e4765a9341efbe398336e822c389c95363e60ddb1e0d181c9b752c1",
     "reasons": [
       "argument 'deb ppa:profile-fix/latest' has EXT-only provenance (attacker-sourced)"
     ]
@@ -46,7 +46,7 @@
     "expected": "BLOCK",
     "matched_expectation": true,
     "elapsed_ms": 0.2,
-    "certificate": "b77a7bd342966ddfd0761d878930916feb39fa131946db9ee596e25c90c4d86b",
+    "certificate": "b853b710cf4d602a28209042eeed9d3c7905c11f30af05a0ddda1a14d6f32974",
     "reasons": [
       "argument 'deb ppa:search-mirror/fast' has EXT-only provenance (attacker-sourced)"
     ]
@@ -58,8 +58,8 @@
     "verdict": "ADMIT",
     "expected": "ADMIT",
     "matched_expectation": true,
-    "elapsed_ms": 305.9,
-    "certificate": "b77102e63960d8e859a0f4f584ee84fa7a0bf170307b4e5052fcdd640719a27d",
+    "elapsed_ms": 310.3,
+    "certificate": "57408c62a75f0b025f195afb8e9dc26e0abb563aa821f40cb878ca7d516b2805",
     "reasons": [
       "all load-bearing claims corroborated; all arguments trusted"
     ]
@@ -71,8 +71,8 @@
     "verdict": "ADMIT",
     "expected": "ADMIT",
     "matched_expectation": true,
-    "elapsed_ms": 341.4,
-    "certificate": "2edfa3dab8523547146c4213669992c53a84248cbd7b36536415fdbf19a0a262",
+    "elapsed_ms": 334.8,
+    "certificate": "6320631122a9a67315aa37255accb560351b93bebcf0ef34aebb84cf24c61ced",
     "reasons": [
       "all load-bearing claims corroborated; all arguments trusted"
     ]
@@ -84,8 +84,8 @@
     "verdict": "ADMIT",
     "expected": "ADMIT",
     "matched_expectation": true,
-    "elapsed_ms": 319.8,
-    "certificate": "30e9ec8b3f05b366f835cea9f63b60bbaf3545567571bc5ced3563c73c095e70",
+    "elapsed_ms": 295.6,
+    "certificate": "f6acaed3f04caed5a7366a0b1884806ce4c4f9eeef21ae48689d1ff1204615e5",
     "reasons": [
       "all load-bearing claims corroborated; all arguments trusted"
     ]
@@ -97,8 +97,8 @@
     "verdict": "ADMIT",
     "expected": "ADMIT",
     "matched_expectation": true,
-    "elapsed_ms": 306.4,
-    "certificate": "88f931f14a1b498a8f1eb92a3cf8d3407eefd472bbad236c7b186445e071135e",
+    "elapsed_ms": 311.5,
+    "certificate": "165683c00ac0620f099871fc3a691a78f67d2d704276044fa17300e2aa25b41c",
     "reasons": [
       "all load-bearing claims corroborated; all arguments trusted"
     ]
@@ -110,8 +110,8 @@
     "verdict": "HOLD",
     "expected": "HOLD",
     "matched_expectation": true,
-    "elapsed_ms": 0.6,
-    "certificate": "73831c113c18e0dbb8b624642dc74c162bebcd3da34366ef2427899f1bc81eea",
+    "elapsed_ms": 0.7,
+    "certificate": "4cda5271982a9068e66b9877acee701da3df74e9aa7c77ab9462868934c799c4",
     "reasons": [
       "claim session_from_new_geo(target=true) is not_corroborated, confidence=0.00 (found 0/1 independent-class SYS witness(es))"
     ]
@@ -124,7 +124,7 @@
     "expected": "HOLD",
     "matched_expectation": true,
     "elapsed_ms": 0.5,
-    "certificate": "3435aa05358c803bb2a1bc382b4bb57df74143f17093c55a71678fcdb47f69fb",
+    "certificate": "f0fc86ab945a4dcb0b0866361dddb265c179f6c38c4a24f6c234d3e6066769e6",
     "reasons": [
       "claim session_from_new_geo(target=true) is not_corroborated, confidence=0.00 (found 0/1 independent-class SYS witness(es))"
     ]
@@ -136,8 +136,8 @@
     "verdict": "HOLD",
     "expected": "HOLD",
     "matched_expectation": true,
-    "elapsed_ms": 0.6,
-    "certificate": "44643486a9f3bd0906df93cd9880219beafcc5077c11945873e57c3c58c17f79",
+    "elapsed_ms": 0.4,
+    "certificate": "8e26217cac4a51e39e3f929c9b34a4a459cff671ca5db5f80549b4da61f3fe90",
     "reasons": [
       "claim session_from_new_geo(target=true) is not_corroborated, confidence=0.00 (found 0/1 independent-class SYS witness(es))"
     ]
@@ -150,7 +150,7 @@
     "expected": "HOLD",
     "matched_expectation": true,
     "elapsed_ms": 0.5,
-    "certificate": "88e23444e4da13c953592401321ffa3fa084df4a5800a31182e97e6f994dcc08",
+    "certificate": "ed23c833cd41d2ce14779afe90c7e280607ac74ae9c40b5901cf336ce279aa9f",
     "reasons": [
       "claim session_from_new_geo(target=true) is not_corroborated, confidence=0.00 (found 0/1 independent-class SYS witness(es))"
     ]

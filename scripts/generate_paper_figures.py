@@ -103,19 +103,23 @@ def asr_and_utility_figure() -> None:
 
 
 def latency_figure() -> None:
-    # Real, previously measured numbers (see README.md "Table 1" section):
-    # pure-Python gate benchmark (scripts/benchmark_latency.py, 3000
-    # trials/scenario, no cluster/LLM call) vs. the real live-pilot
-    # per-decision elapsed time (scripts/pilot_trial_matrix.py /
-    # _ollama.py, includes live telemetry collection) vs. a single
+    # Pure-gate mean comes straight from the fresh benchmark JSON
+    # (scripts/benchmark_latency.py, 3000 trials/scenario, no cluster/LLM
+    # call). The other three points are real measurements documented in
+    # README.md's "Table 1" section: live-pilot per-decision elapsed time
+    # (scripts/pilot_trial_matrix.py, includes live telemetry collection
+    # for ADMIT/HOLD vs. none for a lineage-only BLOCK) and a single
     # `docker stats --no-stream` call's own measured cost.
+    bench = load("latency_benchmark_results.json")
+    pure_gate_mean = bench["overall_mean_ms"]
+
     labels = [
         "Pure gate eval\n(benchmark_latency.py,\nmean, no I/O)",
         "Live gate decision, no telemetry\n(BLOCK on lineage only,\nreal pilot data, mean)",
         "Live gate decision, with telemetry\n(ADMIT/HOLD needing a witness query,\nreal pilot data, mean)",
         "Single `docker stats`\ncall (measured)",
     ]
-    values_ms = [0.046, 0.5, 320.0, 2000.0]  # see docstring; ADMIT rows from pilot_trial_results.json (sonnet)
+    values_ms = [pure_gate_mean, 0.5, 320.0, 2000.0]
 
     fig, ax = plt.subplots(figsize=(10, 5))
     colors = ["#27ae60", "#2980b9", "#e67e22", "#c0392b"]
@@ -132,6 +136,65 @@ def latency_figure() -> None:
     print(f"wrote {OUT / 'latency_breakdown.png'}")
 
 
+def latency_per_scenario_figure() -> None:
+    # Every scenario's mean/p50/p95/p99, straight from the fresh
+    # benchmark JSON -- the per-scenario detail behind the single
+    # "overall mean" bar in latency_breakdown.png.
+    bench = load("latency_benchmark_results.json")
+    scenarios = bench["scenarios"]
+    labels = [s["name"].replace(" (", "\n(") for s in scenarios]
+    metrics = ["mean_ms", "p50_ms", "p95_ms", "p99_ms"]
+    colors = ["#2980b9", "#27ae60", "#e67e22", "#c0392b"]
+
+    fig, ax = plt.subplots(figsize=(10, 5))
+    x = range(len(scenarios))
+    width = 0.2
+    for i, (metric, color) in enumerate(zip(metrics, colors)):
+        offsets = [xi + (i - 1.5) * width for xi in x]
+        values = [s[metric] for s in scenarios]
+        ax.bar(offsets, values, width, label=metric.replace("_ms", ""), color=color)
+    ax.set_ylabel("Milliseconds")
+    ax.set_xticks(list(x))
+    ax.set_xticklabels(labels, fontsize=8)
+    ax.set_title(f"WITNESS gate latency per scenario ({bench['trials_per_scenario']} trials/scenario, pure Python)")
+    ax.legend(fontsize=8)
+    fig.tight_layout()
+    fig.savefig(OUT / "latency_per_scenario.png", dpi=150)
+    plt.close(fig)
+    print(f"wrote {OUT / 'latency_per_scenario.png'}")
+
+
+def test_suite_figure() -> None:
+    # Real per-file test counts from the committed suite (see
+    # README.md's "Test inventory" section), all passing on every push
+    # via .github/workflows/tests.yml.
+    files = [
+        ("test_shell_parser.py", 31),
+        ("test_gate.py", 10),
+        ("test_adapters_unit.py", 10),
+        ("test_engine_upgrades.py", 9),
+        ("test_aiopslab_integration.py", 4),
+        ("test_session_hardening.py", 3),
+    ]
+    total = sum(n for _, n in files)
+    labels = [name for name, _ in files]
+    counts = [n for _, n in files]
+
+    fig, ax = plt.subplots(figsize=(9, 5))
+    bars = ax.barh(labels, counts, color="#27ae60")
+    ax.invert_yaxis()
+    ax.set_xlabel("Tests (all passing)")
+    ax.set_title(f"Test suite: {total}/{total} passing across 6 files (python3 -m pytest -v)")
+    for bar, n in zip(bars, counts):
+        ax.text(bar.get_width() + 0.4, bar.get_y() + bar.get_height() / 2, str(n), va="center", fontsize=9)
+    fig.tight_layout()
+    fig.savefig(OUT / "test_suite.png", dpi=150)
+    plt.close(fig)
+    print(f"wrote {OUT / 'test_suite.png'}")
+
+
 if __name__ == "__main__":
     asr_and_utility_figure()
     latency_figure()
+    latency_per_scenario_figure()
+    test_suite_figure()

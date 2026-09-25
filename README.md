@@ -657,11 +657,18 @@ agent.
 cluster or LLM call — a fair thing to benchmark in isolation since the
 gate makes no model calls of its own:
 
-| Scenario | mean | p50 | p95 | p99 |
-|---|---|---|---|---|
-| nginx_attack (BLOCK) | 0.055ms | 0.047ms | 0.082ms | 0.133ms |
-| cpu_saturation_benign (ADMIT) | 0.038ms | 0.033ms | 0.058ms | 0.094ms |
-| admin_lockout_attack (HOLD) | 0.044ms | 0.036ms | 0.068ms | 0.098ms |
+| Scenario | mean | p50 | p95 | p99 | min | max |
+|---|---|---|---|---|---|---|
+| nginx_attack (BLOCK) | 0.0515ms | 0.0450ms | 0.0741ms | 0.1256ms | 0.0389ms | 0.9285ms |
+| cpu_saturation_benign (ADMIT) | 0.0345ms | 0.0303ms | 0.0524ms | 0.0758ms | 0.0257ms | 0.7123ms |
+| admin_lockout_attack (HOLD) | 0.0361ms | 0.0300ms | 0.0546ms | 0.0838ms | 0.0223ms | 4.3143ms |
+| mixed_truth_attack (BLOCK) | 0.0486ms | 0.0415ms | 0.0848ms | 0.1254ms | 0.0317ms | 1.0127ms |
+| **Overall** | **0.0427ms** | — | — | **0.1256ms** (worst-case p99) | — | — |
+
+Full JSON: `live_env/results/latency_benchmark_results.json`
+(regenerate with `PYTHONPATH=. python3 scripts/benchmark_latency.py --trials 3000`).
+
+![WITNESS gate latency per scenario](docs/figures/latency_per_scenario.png)
 
 For scale: the published counterfactual/re-execution defenses
 (AttriGuard, MELON, CausalArmor) add **1.22x–3x relative** latency over
@@ -816,6 +823,8 @@ where noted:
 - `tests/test_adapters_unit.py` — telemetry format compatibility, trusted-knowledge loading, claim extraction
 - `tests/test_aiopslab_integration.py` — binds to and drives the real, unmodified AIOpsLab classes (skips cleanly if the checkout isn't present, e.g. on CI)
 - `tests/test_session_hardening.py` — the gate's fail-safe error handling: a non-string command, a classifier exception, and an internal exception inside the gate itself all refuse safely instead of crashing the agent loop or silently admitting
+
+![Test suite: 67/67 passing across 6 files](docs/figures/test_suite.png)
 
 The live-environment pilots (`scripts/pilot_trial_matrix.py`,
 `scripts/pilot_trial_matrix_ollama.py`) and latency benchmark

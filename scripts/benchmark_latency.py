@@ -23,7 +23,7 @@ import statistics
 import time
 
 from witness_core import WitnessGate, build_default_catalog
-from scenarios import admin_lockout_attack, cpu_saturation_benign, nginx_attack
+from scenarios import admin_lockout_attack, cpu_saturation_benign, mixed_truth_attack, nginx_attack
 
 
 def percentile(sorted_values: list[float], p: float) -> float:
@@ -76,6 +76,7 @@ def main() -> None:
         ("nginx_attack (BLOCK)", nginx_attack),
         ("cpu_saturation_benign (ADMIT)", cpu_saturation_benign),
         ("admin_lockout_attack (HOLD)", admin_lockout_attack),
+        ("mixed_truth_attack (BLOCK)", mixed_truth_attack),
     ]:
         r = benchmark_scenario(name, module, args.trials)
         results.append(r)
@@ -94,6 +95,14 @@ def main() -> None:
     print("takes seconds, dominated by LLM calls). WITNESS's own gate evaluation")
     print(f"here costs {overall_mean:.2f}ms in absolute terms -- effectively free")
     print("next to any LLM round-trip, since it makes no model calls of its own.")
+
+    import json
+    import os
+    out_path = os.path.join(os.path.dirname(__file__), "..", "live_env", "results", "latency_benchmark_results.json")
+    with open(out_path, "w") as f:
+        json.dump({"trials_per_scenario": args.trials, "scenarios": results,
+                    "overall_mean_ms": overall_mean, "overall_p99_ms": overall_p99}, f, indent=2)
+    print(f"\nFull results written to {out_path}")
 
 
 if __name__ == "__main__":
