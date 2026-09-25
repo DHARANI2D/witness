@@ -22,8 +22,11 @@ and only then dispatches the parsed action), so by the time
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
 from typing import Callable, Optional
+
+logger = logging.getLogger(__name__)
 
 from witness_core import (
     EvidenceStore,
@@ -98,30 +101,61 @@ def install_witness_gate(
     original_parse = ResponseParser.parse
 
     def captured_parse(self, response: str) -> dict:
+        # original_parse's exceptions (e.g. AIOpsLab's ResponseParsingError
+        # for a malformed agent reply) must propagate unchanged -- callers
+        # rely on that error to prompt the agent to retry. Only the
+        # bookkeeping WITNESS layers on top is defensively wrapped, so a
+        # bug in *that* can never mask or replace a real parser error.
         result = original_parse(self, response)
-        context = result.get("context")
-        if context:
-            session.current_rca_text = "\n".join(context) if isinstance(context, list) else str(context)
+        try:
+            context = result.get("context")
+            if context:
+                session.current_rca_text = "\n".join(context) if isinstance(context, list) else str(context)
+        except Exception:
+            logger.exception("failed to capture RCA context from a parsed response; leaving prior context in place")
         return result
 
     def gated_exec_shell(command: str, timeout: int = 30) -> str:
-        classified = parse_shell_command(command)
-        outputs = []
+        if not isinstance(command, str):
+            logger.warning("exec_shell received a non-string command (%r); refusing.", type(command))
+            return f"[WITNESS BLOCK] Command refused: expected a string, got {type(command).__name__}."
 
+        try:
+            classified = parse_shell_command(command)
+        except Exception:
+            logger.exception("shell command classifier raised on command=%r; failing safe to BLOCK", command)
+            return f"[WITNESS BLOCK] Command refused: could not classify it safely: {command!r}"
+
+        outputs = []
         for part in classified:
             if part.read_only:
                 outputs.append(original_exec_shell(part.raw, timeout=timeout))
                 continue
 
-            claims = claim_extractor.extract(session.current_rca_text, session.store)
-            remediation = ProposedRemediation(
-                incident_id=session.incident_id,
-                claims=claims,
-                action=part.action,
-            )
-            decision = gate.evaluate(remediation, session.store)
-            session.decisions.append(decision)
+            try:
+                claims = claim_extractor.extract(session.current_rca_text, session.store)
+                remediation = ProposedRemediation(
+                    incident_id=session.incident_id,
+                    claims=claims,
+                    action=part.action,
+                )
+                decision = gate.evaluate(remediation, session.store)
+            except Exception:
+                # WITNESS itself must never be a single point of failure
+                # that either crashes the agent loop or, worse, falls
+                # through to running the command unchecked. An internal
+                # error in the gate fails safe exactly like a BLOCK.
+                logger.exception(
+                    "WITNESS gate raised while evaluating %r; failing safe to BLOCK instead of executing it",
+                    part.raw,
+                )
+                outputs.append(
+                    f"[WITNESS BLOCK] Command refused: an internal error occurred while evaluating "
+                    f"it, so it was not executed: {part.raw!r}"
+                )
+                continue
 
+            session.decisions.append(decision)
             if decision.verdict in (Verdict.BLOCK, Verdict.HOLD):
                 outputs.append(_format_verdict_message(part.raw, decision))
             else:

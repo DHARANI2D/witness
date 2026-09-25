@@ -1,0 +1,36 @@
+name: tests
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: ["**"]
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install package (with dev extras)
+        run: pip install -e ".[dev]"
+
+      # tests/test_aiopslab_integration.py skips cleanly (not fail) when
+      # no AIOPSLAB_REPO_PATH checkout is present, which is the case on
+      # CI runners -- no cluster, no AIOpsLab clone, no network fetch of
+      # either is set up here. Everything else (63+ tests covering the
+      # engine, the shell-command classifier, and the adapters) runs
+      # with zero external dependencies.
+      - name: Run test suite
+        run: python -m pytest -v
+
+      - name: Run the pure-Python demo (smoke test)
+        run: witness-demo

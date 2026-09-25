@@ -1,0 +1,45 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "witness-admission-gate"
+version = "0.2.0"
+description = "A deterministic admission gate for autonomous AIOps/SOC remediation: corroboration, not attribution."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "Proprietary" }
+authors = [{ name = "WITNESS project" }]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Operating System :: OS Independent",
+    "Topic :: Security",
+]
+# witness_core itself has zero third-party dependencies (Python
+# standard library only) so it can be embedded in a host system without
+# pulling in anything else.
+dependencies = []
+
+[project.optional-dependencies]
+# adapters/ integrates with a real, vendored AIOpsLab checkout and needs
+# a YAML loader for the trusted-knowledge (K channel) config.
+adapters = ["pyyaml>=6.0"]
+# Everything needed to run the vendored microsoft/AIOpsLab checkout for
+# tests/test_aiopslab_integration.py -- see requirements-aiopslab.txt
+# and scripts/setup_aiopslab_dev.sh for the full setup.
+aiopslab = ["pyyaml>=6.0", "kubernetes>=30", "prometheus-api-client>=0.5.5",
+    "elasticsearch>=8,<9", "pandas>=2.0", "pytz", "rich", "paramiko>=3.5",
+    "docker>=7.0", "wandb", "tiktoken", "openai", "pydantic>=2.7",
+    "azure-identity", "fastapi", "python-dotenv", "colorama", "prompt-toolkit"]
+dev = ["pytest>=8.0", "pyyaml>=6.0"]
+
+[project.scripts]
+witness-demo = "demo:main"
+
+[tool.setuptools]
+packages = ["witness_core", "adapters", "scenarios"]
+py-modules = ["demo"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

@@ -89,7 +89,7 @@ scenarios/            3 hand-built EvidenceStore fixtures exercising witness_cor
 live_env/              docker-compose HotelReservation (real containers, no k8s) + results/
 demo.py               runs the 3 scenarios against witness_core only
 demo_aiopslab.py       runs the same 3 narratives through the REAL AIOpsLab classes
-tests/                 64 tests across 5 files (engine, shell parser, adapters, live AIOpsLab integration)
+tests/                 67 tests across 6 files (engine, shell parser, adapters, live AIOpsLab integration)
 scripts/setup_aiopslab_dev.sh   clones AIOpsLab and prepares it for import (no cluster needed)
 scripts/pilot_trial_matrix.py   the 12-trial live pilot behind Table 1 below
 scripts/benchmark_latency.py    the pure-Python gate latency benchmark
@@ -150,19 +150,35 @@ and separately confirms a genuine CPU-saturation incident, backed by
 telemetry in AIOpsLab's actual metrics-CSV schema from two independent
 exporter families, is admitted and reaches real command execution.
 
+### Installing
+
+```bash
+pip install -e .              # witness_core + adapters + scenarios, editable
+pip install -e ".[dev]"       # + pytest, for running the test suite
+```
+
+`witness_core` has zero third-party dependencies (Python standard
+library only), so it can be vendored into a host system without pulling
+in anything else; `adapters` needs `pyyaml` for the K-channel config
+(`pip install -e ".[adapters]"` if you only want that, not pytest).
+
 ### Running it
 
 ```bash
 # The deterministic engine alone (no AIOpsLab needed):
-python3 demo.py
-pip install -r requirements-dev.txt
-python3 -m pytest -v                              # 64 tests, stdlib-only
+witness-demo                                      # installed console script, or: python3 demo.py
+python3 -m pytest -v                              # 67 tests, stdlib-only
 
 # Wired to the real AIOpsLab classes:
 ./scripts/setup_aiopslab_dev.sh                   # clones AIOpsLab, no cluster needed
 AIOPSLAB_REPO_PATH=/home/user/microsoft/aiopslab python3 demo_aiopslab.py
 AIOPSLAB_REPO_PATH=/home/user/microsoft/aiopslab python3 -m pytest tests/test_aiopslab_integration.py -v
 ```
+
+`.github/workflows/tests.yml` runs the full suite on every push (Python
+3.11 and 3.12), with no external services or accounts required — the
+AIOpsLab-integration tests skip cleanly on CI, same as they do locally
+without a checkout.
 
 `setup_aiopslab_dev.sh` clones the repo, writes a `config.yml` with
 `k8s_host: localhost` (so the ADMIT path runs local subprocesses, not
@@ -372,15 +388,17 @@ independent of whether any claim in the RCA happens to be true. A real
 fact does not launder an unrelated literal.
 `tests/test_gate.py::test_mixed_truth_attack_is_blocked_despite_a_real_corroborated_claim`.
 
-## Test inventory (64 tests, `python3 -m pytest -v`)
+## Test inventory (67 tests, `python3 -m pytest -v`)
 
 - `tests/test_gate.py` — the 4 scenarios end to end, certificate-chain integrity, fail-safe unknown-predicate handling
 - `tests/test_engine_upgrades.py` — class-diverse quorum, temporal staleness, fail-safe source resolution, homoglyph/zero-width lineage bypass attempts
 - `tests/test_shell_parser.py` — 31 real-shaped `exec_shell` command strings classified correctly (read-only recognition, repo/package/k8s/service/docker/TLS/firewall/identity mutations, fail-safe fallback)
 - `tests/test_adapters_unit.py` — telemetry format compatibility, trusted-knowledge loading, claim extraction
 - `tests/test_aiopslab_integration.py` — binds to and drives the real, unmodified AIOpsLab classes (skips cleanly if the checkout isn't present)
+- `tests/test_session_hardening.py` — the gate's fail-safe error handling: a non-string command, and an internal exception inside the gate itself, both refuse safely instead of crashing the agent loop or silently admitting
 
-The live-environment pilot (`scripts/pilot_trial_matrix.py`) and latency
-benchmark (`scripts/benchmark_latency.py`) are separate from the pytest
-suite since they need `live_env/` running (or, for latency, nothing at
-all) rather than being unit tests — see Table 1 above.
+The live-environment pilots (`scripts/pilot_trial_matrix.py`,
+`scripts/pilot_trial_matrix_ollama.py`) and latency benchmark
+(`scripts/benchmark_latency.py`) are separate from the pytest suite
+since they need `live_env/` running (or, for latency, nothing at all)
+rather than being unit tests — see Table 1 above.
