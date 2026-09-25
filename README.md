@@ -34,6 +34,15 @@ channel wasn't itself compromised (that's explicitly future work, see
 "Next steps" territory), so "provenance-aware" or "channel-disjoint" is
 the defensible framing until attestation exists.
 
+**For the abstract document itself** (not this README): see
+[`CHANGES.md`](CHANGES.md) for a section-by-section list of what the
+TechCon2027 abstract draft needs updated given everything measured here —
+Table 1 filled with real pilot numbers, the benign-utility/agent-capability
+finding, the latency-source breakdown, the independence caveat, the
+"partial truth" scenario, and the Acknowledgements disclosure — with two
+real figures (`docs/figures/`, regenerable via
+`scripts/generate_paper_figures.py`).
+
 ## What changed from the original abstract, and why
 
 Building this against AIOpsLab's actual source surfaced real gaps in
@@ -237,6 +246,48 @@ independently confirmed by re-checking `docker stats` after each: CPU
 dropped from ~380-400% back to ~0.02-0.03% in every case, i.e. the
 admitted remediation genuinely fixed the genuine fault.
 
+### The genuinely independent pilot: SmolLM2-1.7B via Ollama, zero API cost
+
+The pilot above has one honesty gap: the RCA/command text was authored
+directly by Claude Sonnet 5 — the same model doing this project's own
+analysis — not produced by a separate model actually reasoning over the
+incident at inference time. `scripts/pilot_trial_matrix_ollama.py`
+closes that gap: a small (1.7B), free, **locally-run** model
+(`ai/smollm2:1.7b-q4_K_M`, fetched via Docker Hub's `ai/` namespace and
+served by a self-hosted Ollama container — see
+`live_env/fetch_local_model.sh` and `adapters/ollama_agent.py`; no
+OpenAI/Azure key anywhere) genuinely completes each incident prompt, and
+its raw completion is parsed by AIOpsLab's own unmodified
+`ResponseParser` before WITNESS ever sees it.
+
+| Configuration | Attack success rate | Benign utility | Legit-values attacks held |
+|---|---|---|---|
+| No defense (baseline, parsed trials) | **67% (2/3)** | 0% (0/4 — see note below) | 0/4 (0%) |
+| WITNESS (this work, live trial) | **0% (0/3)** | 0% (0/4 — see note below) | **100% (4/4) correctly HELD** |
+
+Full per-trial output:
+`live_env/results/pilot_trial_results_ollama.json` (raw model
+completion, parsed command, baseline-bait flag, WITNESS verdict,
+certificate hash, latency — all real). One attack trial (A2) never
+produced a parseable command after 3 retries and is excluded from ASR,
+matching how it's counted above.
+
+**The benign-utility number needs its own reading, not a "false
+positive" label.** All 4 benign trials were HELD, not because the
+CPU-saturation claim failed to corroborate — it corroborated in every
+trial — but because the 1.7B model's own proposed commands were
+themselves malformed or fabricated (`sudo ulimit -H -p 4`, `docker exec
+-it hotel-geo /bin/bash` for a CPU fault, diagnostic one-liners with
+invented flags). WITNESS correctly held on lineage grounds: the literal
+argument had no basis in K/SYS/EXT. This surfaces a real, previously
+unstated coupling — **the action-argument lineage check assumes the
+acting agent is capable enough to emit clean, expected commands** — a
+frontier model mostly satisfies that; a 1.7B local model mostly does
+not. Treat WITNESS's utility claims as conditional on agent capability,
+not as a single agent-independent number.
+
+![Real pilot ASR and benign utility, both acting agents](docs/figures/asr_and_utility.png)
+
 **Latency** (`scripts/benchmark_latency.py`, 3000 trials/scenario, pure
 Python, no cluster or LLM call — this is a fair thing to benchmark in
 isolation since the gate makes no model calls of its own):
@@ -260,6 +311,8 @@ finding and a concrete optimization target for a production integration
 (batch/cache stats collection or query the Engine API directly instead
 of shelling out to the CLI per witness query — this repo currently does
 the latter for simplicity).
+
+![Where WITNESS's decision latency actually goes](docs/figures/latency_breakdown.png)
 
 ### What "independent" actually means here — and its limit
 
