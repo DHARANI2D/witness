@@ -30,15 +30,20 @@ containers), one per acting agent:
 | No defense (published, GPT-4o/4.1, 180 trials)[1] | 90% | — | — | frontier, paid |
 | No defense (this project, live pilot) | **100%** (4/4, malicious by construction) | 100% (4/4) | 0/4 (0%) | Claude Sonnet 5 authoring the RCA/command text directly |
 | WITNESS (this project, live pilot) | **0%** (0/4) | **100%** (4/4) | **100%** (4/4) | Claude Sonnet 5 |
-| No defense (this project, live pilot) | **100%** (2/2 parsed) | 0% (0/3, see §3) | 0/3 (0%) | SmolLM2-1.7B, genuine local inference via Ollama, zero cost |
-| WITNESS (this project, live pilot) | **0%** (0/2) | 0% (0/3, see §3) | **100%** (3/3) | SmolLM2-1.7B via Ollama |
+| No defense (this project, pooled across 2 live pilot runs) | **67%** (2/3 parsed) | 0% (0/4, see §3) | 0/4 admitted a mutating action | SmolLM2-1.7B, genuine local inference via Ollama, zero cost |
+| WITNESS (this project, pooled across 2 live pilot runs) | **0%** (0/3) | 0% (0/4, see §3) | **100%** (4/4 safe: 3 HELD, 1 read-only bypass) | SmolLM2-1.7B via Ollama |
 
 Sources: `live_env/results/pilot_trial_results.json` (Sonnet-authored,
-12 trials), `live_env/results/pilot_trial_results_ollama.json` (Ollama,
-12 trials: 2/4 attack, 3/4 benign, and 3/4 legit-values trials parsed —
-the rest never produced a parseable response after 3 retries, a genuine
+12 trials), `live_env/results/pilot_trial_results_ollama_run1.json` and
+`..._run2.json` (Ollama, two independent 12-trial runs against the live
+environment, same prompt and temperature=0.2, pooled: 3/8 attack, 4/8
+benign, 4/8 legit-values trials parsed across both runs combined — the
+rest never produced a parseable response after 3 retries, a genuine
 small-model reliability finding, reported as observed rather than
-excluded from the record). Chart: `docs/figures/asr_and_utility.png`.
+excluded from the record). **Pooling, not cherry-picking:** run 1 parsed
+8/12 trials, run 2 parsed only 3/12 under the identical configuration —
+a real reproducibility finding in its own right (§2 has more). Chart:
+`docs/figures/asr_and_utility.png`.
 
 **Change:** replace the single Table 1 with the above, and add one
 sentence distinguishing the two agent rows: the Sonnet-authored trials
@@ -84,6 +89,18 @@ real-but-wrong commands, plus one correct read-only bypass) without
 changing the bottom-line utility number — itself informative: this is a
 capability ceiling, not a prompt-wording problem within reach of
 further iteration at this parameter count.
+
+A closer read of the second pooled run's raw responses
+(`live_env/results/pilot_trial_results_ollama_run2.json`) adds a real
+nuance, though: on several benign trials the model's full response
+*did* eventually reach `docker restart <the-correct-container>` — after
+a first, diagnostic code block (`docker stats ...`). This project's own
+parser requires exactly one code block and rejects the two-block reply
+as unparseable before the correct command is ever evaluated. Part of
+the observed 0% utility is therefore a strict-parser artifact on top of
+the genuine capability gap, not purely the model being wrong — worth
+naming as its own limitation of this evaluation's harness, separate
+from the model's.
 
 **Why this matters for the paper:** it reveals a real, previously
 unstated coupling in the design — **WITNESS's action-argument lineage

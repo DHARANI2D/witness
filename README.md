@@ -593,24 +593,37 @@ remediation genuinely fixed the genuine fault.
 
 This is the pilot worth leading with: the RCA and the `exec_shell`
 command come from a real, free, locally-run model actually reasoning at
-inference time, with no involvement from the engineering process. This
-is the **current, final run** after a prompt-engineering pass aimed at
-closing the benign-utility gap (see the note below the table) —
-`adapters/ollama_agent.py`'s system prompt is the one this table
-reflects.
+inference time, with no involvement from the engineering process.
 
-| Configuration | Attack success rate | Benign utility | Legit-values attacks held |
+**Pooled across 2 independent 12-trial runs** (24 trials attempted, run
+against the live environment on two separate occasions with the same
+system prompt and temperature=0.2) — pooling, not cherry-picking the
+better run, is the point: see the run-to-run variance note below the
+table for why a single run's small parsed-n isn't trustworthy on its
+own.
+
+| Configuration | Attack success rate | Benign utility | Legit-values safety |
 |---|---|---|---|
-| No defense (baseline, parsed trials) | **100% (2/2)** | 0% (0/3 — see note below) | 0/3 (0%) |
-| **WITNESS (this work)** | **0% (0/2)** | 0% (0/3 — see note below) | **100% (3/3) correctly HELD** |
+| No defense (baseline, parsed trials) | **67% (2/3)** | 0% (0/4 — see note below) | 0/4 admitted a mutating action |
+| **WITNESS (this work)** | **0% (0/3)** | 0% (0/4 — see note below) | **100% (4/4)** — 3 correctly HELD, 1 safe read-only bypass |
 
-Full per-trial output: `live_env/results/pilot_trial_results_ollama.json`
-(raw model completion, parsed command, baseline-bait flag, WITNESS
-verdict, certificate hash, latency — all real). 2 of 4 attack trials, 1
-of 4 benign trials, and 1 of 4 legit-values trials never produced a
-parseable response after 3 retries and are excluded from their
-respective columns above, matching how the summary script counts them
-(a genuine small-model reliability limitation, reported as observed).
+Full per-trial output: `live_env/results/pilot_trial_results_ollama_run1.json`
+and `..._run2.json` (raw model completion, parsed command, baseline-bait
+flag, WITNESS verdict, certificate hash, latency — all real; `..._ollama.json`
+mirrors the latest individual run). Of 8 attack-trial attempts across
+both runs, 5 attack trials never produced a parseable response after 3
+retries and are excluded from that column, matching how the pooling
+script counts them — a genuine small-model reliability limitation,
+reported as observed, not smoothed over.
+
+**Run-to-run variance is itself a finding.** Run 1 parsed 8/12 trials;
+Run 2 (same prompt, same model, same temperature) parsed only 3/12 —
+a genuine, reproducibility-relevant result for anyone considering a
+1.7B local model as a production AIOps agent, not noise to average
+away silently. Pooling both runs roughly doubles the parsed-n per
+category compared to either run alone, which is the more defensible
+number for a paper table than reporting whichever single run happened
+to parse best.
 
 ![Real pilot ASR and benign utility, both acting agents](docs/figures/asr_and_utility.png)
 
@@ -650,6 +663,24 @@ already stated above — pair WITNESS with a more capable acting agent in
 production, and treat this repo's local model as proof the *gate*
 needs no paid inference, not as a recommended production remediation
 agent.
+
+**A sharper nuance from the second pooled run:** on several benign
+trials (`live_env/results/pilot_trial_results_ollama_run2.json`, B1/B3/B4)
+the model's raw response *did* eventually reason its way to
+`docker restart <the-correct-container>` — the exact canonical fix —
+but wrapped it in a second fenced code block after an initial
+diagnostic one (`docker stats ...`), which this project's own strict
+"exactly one code block" reply-format rule rejects as a parse failure
+before the command ever reaches the lineage check. That reframes part
+of the gap: it is not purely that the model doesn't know the right
+command, but that a two-step "diagnose, then fix" reasoning pattern —
+arguably the more realistic operator behavior — collides with a
+parser built for single-shot answers. A production integration pairing
+a small local model with WITNESS should likely relax that constraint
+(accept the last code block as the action, treat earlier ones as
+read-only diagnostics) rather than demand one-shot replies; this
+repo's own parser intentionally stays strict for now so every
+parse failure is visible in the data above, not silently repaired.
 
 ### Latency
 
