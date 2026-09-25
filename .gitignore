@@ -2,3 +2,9 @@ __pycache__/
 *.pyc
 .pytest_cache/
 *.egg-info/
+build/
+dist/
+*.gguf
+live_env/models/
+.venv/
+venv/
