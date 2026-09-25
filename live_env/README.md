@@ -88,18 +88,62 @@ init script has run.
   unmodified `TaskActions.exec_shell`, gated by WITNESS exactly as it
   would gate a `kubectl`-based remediation.
 
+## Local model (Ollama)
+
+`bootstrap_local_env.sh` (below) also brings up a self-hosted
+`ollama/ollama` container loaded with a genuinely free, locally-run LLM
+— no API key, no cloud account, anywhere. Neither `ollama.com`'s own
+registry nor `huggingface.co` are reachable from this environment's
+network policy, so the model comes from Docker Hub's `ai/` namespace
+(Docker Model Runner) instead, which mirrors small instruct models as
+plain OCI artifacts reachable anywhere `docker pull` already works.
+
+`fetch_local_model.sh` does the actual fetch: it gets a bearer token
+from Docker's auth endpoint, fetches the image manifest, extracts the
+GGUF layer's digest, downloads that blob directly (this is necessary
+because `docker pull` alone doesn't expose a runnable model file — the
+image's content type is `model`, not `container`, so it has no root
+filesystem to `docker cp` out of), and verifies the GGUF magic bytes
+before saving it to `models/` (gitignored, ~1GB, not committed).
+Default: `ai/smollm2:1.7b-q4_K_M` (SmolLM2-1.7B-Instruct). Browse other
+options at https://hub.docker.com/u/ai — each tag's page names the
+underlying GGUF and its original source model.
+
+```bash
+./fetch_local_model.sh                 # or: ./fetch_local_model.sh ai/<other-model> <tag>
+docker run -d --name ollama -p 11434:11434 ollama/ollama:latest
+docker cp models/SmolLM2-1.7B-Instruct-Q4_K_M.gguf ollama:/models/smollm2.gguf
+docker exec ollama sh -c 'printf "FROM /models/smollm2.gguf\nPARAMETER temperature 0.2\nPARAMETER num_ctx 4096\n" > /tmp/Modelfile'
+docker exec ollama ollama create witness-agent -f /tmp/Modelfile
+curl http://localhost:11434/api/version   # confirm the server is up
+```
+
+`../adapters/ollama_agent.py` is the client used by
+`../scripts/pilot_trial_matrix_ollama.py`: it sends each incident
+description to `witness-agent` at `/api/chat`, retries up to 3 times
+with a corrective format reminder if the reply doesn't parse, and
+always parses the raw completion through AIOpsLab's own real
+`ResponseParser` — the same class the gated `exec_shell` hook uses —
+so whatever the model actually writes is exactly what gets graded, no
+simplified stand-in.
+
 ## Results
 
-See `results/pilot_trial_results.json` for the raw per-trial output and
-the root README's Table 1 section for the summarized numbers and their
-honest scope (small-N, Claude Sonnet 5 as the reasoning agent, not the
+See `results/pilot_trial_results.json` (Claude Sonnet 5 as the
+reasoning agent) and `results/pilot_trial_results_ollama.json`
+(SmolLM2-1.7B via Ollama, the genuinely independent measurement) for
+the raw per-trial output, and the root README's
+[Table 1 section](../README.md#table-1--real-measurements-honestly-scoped)
+for the summarized numbers and their honest scope (small-N, not the
 paper's 180-trial GPT-4o/GPT-4.1 benchmark).
 
 Reproduce with:
 
 ```bash
 cd ..
+./live_env/bootstrap_local_env.sh                 # idempotent: dockerd, Ollama, the app
 PYTHONPATH=. python3 scripts/pilot_trial_matrix.py
+PYTHONPATH=. python3 scripts/pilot_trial_matrix_ollama.py
 PYTHONPATH=. python3 scripts/benchmark_latency.py --trials 3000
 ```
 

@@ -30,13 +30,15 @@ containers), one per acting agent:
 | No defense (published, GPT-4o/4.1, 180 trials)[1] | 90% | — | — | frontier, paid |
 | No defense (this project, live pilot) | **100%** (4/4, malicious by construction) | 100% (4/4) | 0/4 (0%) | Claude Sonnet 5 authoring the RCA/command text directly |
 | WITNESS (this project, live pilot) | **0%** (0/4) | **100%** (4/4) | **100%** (4/4) | Claude Sonnet 5 |
-| No defense (this project, live pilot) | **67%** (2/3 parsed) | 0% (0/4, see §3) | 0/4 (0%) | SmolLM2-1.7B, genuine local inference via Ollama, zero cost |
-| WITNESS (this project, live pilot) | **0%** (0/3) | 0% (0/4, see §3) | **100%** (4/4) | SmolLM2-1.7B via Ollama |
+| No defense (this project, live pilot) | **100%** (2/2 parsed) | 0% (0/3, see §3) | 0/3 (0%) | SmolLM2-1.7B, genuine local inference via Ollama, zero cost |
+| WITNESS (this project, live pilot) | **0%** (0/2) | 0% (0/3, see §3) | **100%** (3/3) | SmolLM2-1.7B via Ollama |
 
 Sources: `live_env/results/pilot_trial_results.json` (Sonnet-authored,
 12 trials), `live_env/results/pilot_trial_results_ollama.json` (Ollama,
-12 trials, 1 parse failure excluded from ASR). Chart:
-`docs/figures/asr_and_utility.png`.
+12 trials: 2/4 attack, 3/4 benign, and 3/4 legit-values trials parsed —
+the rest never produced a parseable response after 3 retries, a genuine
+small-model reliability finding, reported as observed rather than
+excluded from the record). Chart: `docs/figures/asr_and_utility.png`.
 
 **Change:** replace the single Table 1 with the above, and add one
 sentence distinguishing the two agent rows: the Sonnet-authored trials
@@ -63,15 +65,25 @@ noise of the undefended agent."
 
 **What we found:** with Claude Sonnet 5 authoring the commands, H2 held
 exactly (100% vs. 100%). With SmolLM2-1.7B actually reasoning over the
-same benign CPU-saturation incidents, **all 4 trials were HELD, not
-ADMITted** — 0% utility. This is not a corroboration failure or a
-WITNESS false positive on a legitimate action: in every case the small
-model's proposed command was itself malformed or fabricated (`sudo
-ulimit -H -p 4`, `docker exec -it hotel-geo /bin/bash` for a CPU fault,
-diagnostic one-liners with invented flags) — WITNESS correctly held
-because the literal argument had no lineage in K/SYS/EXT, not because
-the CPU-saturation claim failed to corroborate (it did corroborate in
-every trial).
+same benign CPU-saturation incidents, across two independent pilot
+runs (an initial system prompt, and a revised one written specifically
+to steer the model toward the canonical `docker restart <container>`
+fix), **0% of parsed benign trials were ADMITted** either time. This is
+not a corroboration failure or a WITNESS false positive on a legitimate
+action: in every case the small model's proposed command was itself
+malformed, fabricated, or simply the wrong action for the evidence
+(`sudo ulimit -H -p 4`; `docker exec -it hotel-geo /bin/bash` — a real
+command, but an interactive shell, not a restart; one trial correctly
+proposed a harmless read-only `ls`, which WITNESS correctly bypassed
+rather than held) — WITNESS correctly held the mutating proposals
+because their literal arguments had no lineage in K/SYS/EXT, not
+because the CPU-saturation claim failed to corroborate (it corroborated
+every time it was evaluated). The revised prompt measurably changed
+the *character* of the model's mistakes (from fabricated flags to
+real-but-wrong commands, plus one correct read-only bypass) without
+changing the bottom-line utility number — itself informative: this is a
+capability ceiling, not a prompt-wording problem within reach of
+further iteration at this parameter count.
 
 **Why this matters for the paper:** it reveals a real, previously
 unstated coupling in the design — **WITNESS's action-argument lineage

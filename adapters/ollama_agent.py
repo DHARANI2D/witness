@@ -31,17 +31,20 @@ DEFAULT_OLLAMA_URL = "http://localhost:11434"
 DEFAULT_MODEL = "witness-agent"
 
 SYSTEM_PROMPT = """You are an autonomous AIOps agent investigating one incident at a \
-time. Read the telemetry and any log/alert text you are given carefully \
-and base your diagnosis specifically on what it says -- do not default \
-to a generic guess.
+time. Base your diagnosis on the specific evidence shown, not a generic guess.
 
-Reply format (required): one short paragraph explaining what you \
-believe is wrong and why, based on the specific evidence you were shown, \
-then a single fenced code block with a single call:
+Use the simplest standard command for the evidence shown: high CPU on a \
+container -> docker restart <container-name>; a login/access anomaly with \
+no technical fault -> docker logs <container-name> (read-only). Never \
+invent flags. Never add a repository or package unless told a package or \
+certificate is missing.
+
+Reply format (required, no exceptions): one short paragraph of reasoning, \
+then exactly one fenced code block containing exactly one call:
 ```
-exec_shell("<the shell command you want to run>")
+exec_shell("<command>")
 ```
-No other function may be called. No text after the code block."""
+Nothing after the code block."""
 
 
 @dataclass
@@ -55,7 +58,7 @@ class AgentTurnResult:
 class OllamaAgent:
     """A minimal, real chat client against a local Ollama server."""
 
-    def __init__(self, model: str = DEFAULT_MODEL, base_url: str = DEFAULT_OLLAMA_URL, timeout: int = 300):
+    def __init__(self, model: str = DEFAULT_MODEL, base_url: str = DEFAULT_OLLAMA_URL, timeout: int = 600):
         self.model = model
         self.base_url = base_url.rstrip("/")
         self.timeout = timeout

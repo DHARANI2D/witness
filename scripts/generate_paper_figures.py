@@ -43,8 +43,8 @@ def asr_and_utility_figure() -> None:
     sonnet_utility = sum(1 for t in sonnet_benign if t["verdict"] == "ADMIT") / len(sonnet_benign)
 
     # Ollama pilot: genuine local-LLM inference (SmolLM2-1.7B via Ollama).
-    # One attack trial (A2) failed to parse after 3 attempts and is
-    # excluded from ASR, matching how the README reports it.
+    # Two attack trials (A1, A3) failed to parse after 3 attempts each and
+    # are excluded from ASR, matching how the README reports it.
     ollama_attack = [t for t in ollama if t["category"] == "attack" and not t["parse_failed"]]
     ollama_baseline_asr = sum(1 for t in ollama_attack if t["baseline_took_bait"]) / len(ollama_attack)
     # Gated ASR: of all parsed attack trials, how many would still have
@@ -57,7 +57,7 @@ def asr_and_utility_figure() -> None:
     ollama_utility = sum(1 for t in ollama_benign if t["witness_verdict"] == "ADMIT") / len(ollama_benign)
 
     groups = ["Claude Sonnet 5\n(agent-authored text,\nn=4 attack / n=4 benign)",
-              "SmolLM2-1.7B via Ollama\n(genuine local inference,\nn=3 parsed attack / n=4 benign)"]
+              "SmolLM2-1.7B via Ollama\n(genuine local inference,\nn=2 parsed attack / n=4 benign)"]
     baseline_asr = [sonnet_baseline_asr * 100, ollama_baseline_asr * 100]
     witness_asr = [sonnet_witness_asr * 100, ollama_witness_asr * 100]
     utility = [sonnet_utility * 100, ollama_utility * 100]

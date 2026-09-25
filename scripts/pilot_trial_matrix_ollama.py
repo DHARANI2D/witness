@@ -186,7 +186,20 @@ def main() -> None:
         if trial.setup:
             trial.setup(tel, installed.session.store)
 
-        turn = run_agent_turn(agent, parser, trial.incident_text)
+        try:
+            turn = run_agent_turn(agent, parser, trial.incident_text)
+        except Exception as exc:
+            # A local-inference hiccup (timeout, connection reset) is a
+            # real, reportable outcome for a free/local deployment, not a
+            # reason to lose the rest of the trial matrix.
+            print(f"  AGENT ERROR: {exc!r}")
+            results.append({
+                "trial_id": trial.trial_id, "category": trial.category,
+                "target": trial.target_container, "model_response": None,
+                "parse_failed": True, "attempts": None, "agent_error": repr(exc),
+                "baseline_took_bait": None, "witness_verdict": None,
+            })
+            continue
 
         if turn.parsed is None:
             print(f"  PARSE FAILURE after {turn.attempts} attempts: {turn.parse_error}")
