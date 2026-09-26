@@ -475,32 +475,51 @@ AIOpsLab's own setup exactly, and diagnosed in full
    automatically.
 3. With that fixed, cluster creation still failed one level deeper:
    every pod sandbox failed with `runc create failed: unable to start
-   container process: can't get final child's PID from pipe: EOF`.
-   Investigated systematically, not assumed: PID/mount/cgroup namespace
-   limits were checked and ruled out (`/proc/sys/user/max_*_namespaces`
-   is nowhere near exhausted; a manual `unshare --pid --mount --uts
-   --ipc --net --fork --mount-proc` at the *same* nesting depth inside
-   the kind node succeeds fine). `dmesg` showed no LSM/seccomp denial.
-   The most consistent explanation is a nesting-depth limit specific to
-   the full OCI container-create sequence (cgroup delegation + seccomp
-   + pivot_root together) at the 4th level of container nesting (host →
-   sandbox → kind node → pod sandbox) — a restriction enforced above
-   the Docker layer this environment controls, not fixable from inside
-   it.
+   container process: can't get final child's PID from pipe: EOF`. At
+   the time this was attributed to a nesting-depth limit (host →
+   sandbox → kind node → pod sandbox, 4 levels), since a manual
+   `unshare --pid --mount --uts --ipc --net --fork --mount-proc` at the
+   same depth inside the kind node succeeded and `dmesg` showed no
+   LSM/seccomp denial.
+
+4. **That theory was directly tested and refuted.** `kubeadm` was run
+   directly on the host against the host's own `containerd` — no kind,
+   no Docker-in-Docker, the same depth as a plain `docker run` (which
+   already works). `kubeadm init` got past cert generation and static
+   pod manifests fine, stalling only on `registry.k8s.io` being blocked
+   by network policy (`Forbidden` on every pull) — worked around by
+   locally tagging an already-pulled Docker Hub image as the expected
+   `pause` sandbox image, needing no registry access at all. With that
+   resolved: **`ctr run` (containerd's own CLI, non-CRI) created and ran
+   a container successfully at this depth, while `crictl runp` (the CRI
+   `RunPodSandbox` call — the exact path `kind`, `kubeadm`, and every
+   other Kubernetes distribution use to start every pod) failed with the
+   identical `can't get final child's PID from pipe: EOF` error,
+   reproduced twice across a container restart.** Every individual
+   primitive works at this depth (raw `unshare`, `ctr run`); only
+   containerd's CRI-specific sandbox-creation sequence fails, and it
+   fails at the *shallowest* depth this sandbox allows — so depth was
+   never the real constraint. The actual blocker is something inside the
+   CRI plugin's own `RunPodSandbox` path (its particular ordering of
+   cgroup delegation, namespace setup, and shim launch), which this
+   Firecracker-microVM sandbox restricts independent of nesting.
 
 Given that, this environment runs the exact same container images
 directly under Docker instead of Kubernetes: still real, live,
 attackable and defensible infrastructure, just without `kubectl` in the
-loop. **If you're running this on a host without that nesting
-restriction** (a bare-metal box, a normal cloud VM, or one level of
-virtualization instead of two), `scripts/setup_aiopslab_dev.sh` plus a
-normal `kind create cluster` should work unmodified (with the
-`cgroupns-mode` fix above, if you hit the same first symptom) — nothing
-in `adapters/` or `witness_core/` assumes docker-compose specifically;
-`adapters/telemetry.py`'s CSV/log-schema parsers already speak AIOpsLab's
-real Prometheus/Elasticsearch formats and are independently tested
-against those formats in `tests/test_adapters_unit.py` without needing
-a live cluster to verify.
+loop. **Corrected guidance:** don't assume fewer nesting layers fixes
+this elsewhere — plain container creation works at any depth tested
+here, but *every* Kubernetes path drives pods through the same CRI
+`RunPodSandbox` call this sandbox blocks regardless of depth. Before
+assuming a depth problem on another host, run the same `ctr run` vs.
+`crictl runp` comparison (`live_env/README.md` has the exact commands);
+if it reproduces the same way, no depth adjustment will help — the host
+needs an environment where the CRI sandbox path itself isn't
+restricted. Nothing in `adapters/` or `witness_core/` assumes
+docker-compose specifically; `adapters/telemetry.py`'s CSV/log-schema
+parsers already speak AIOpsLab's real Prometheus/Elasticsearch formats
+and are independently tested against those formats in
+`tests/test_adapters_unit.py` without needing a live cluster to verify.
 
 ## Local LLM: SmolLM2-1.7B via Ollama, zero API cost
 

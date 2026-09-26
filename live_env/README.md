@@ -27,26 +27,56 @@ diagnosed in detail:
 3. With that fixed, cluster creation still failed, now one level
    deeper: every pod sandbox failed with `runc create failed: unable to
    start container process: can't get final child's PID from pipe:
-   EOF`. This was investigated systematically, not assumed: PID/mount/
-   cgroup namespace limits were checked and are not the bottleneck
-   (`/proc/sys/user/max_*_namespaces` = 64313; a manual `unshare --pid
-   --mount --uts --ipc --net --fork --mount-proc` at the *same* nesting
-   depth inside the kind node succeeds). `dmesg` showed no LSM/seccomp
-   denial after the failure. The most consistent explanation is a
-   nesting-depth limit in this Firecracker-microVM sandbox specific to
-   the full OCI container-create sequence (cgroup delegation + seccomp
-   + pivot_root together, not any single primitive) at the 4th level of
-   container nesting (host → sandbox → kind node → pod sandbox) — a
-   restriction enforced above the Docker layer this session controls,
-   so it can't be fixed from inside it.
+   EOF`. At the time this was attributed to a nesting-depth limit (host
+   → sandbox → kind node → pod sandbox, 4 levels), since a manual
+   `unshare --pid --mount --uts --ipc --net --fork --mount-proc` at the
+   same depth inside the kind node succeeded and `dmesg` showed no
+   LSM/seccomp denial.
+
+4. **That nesting-depth theory was directly tested and refuted.**
+   Task #24 attempted the "one less layer" fix it implied: `kubeadm`
+   running directly on this host against the host's own `containerd`
+   (no kind, no Docker-in-Docker at all — host → pod sandbox, the same
+   depth as a plain `docker run`, which works fine). `kubeadm init`
+   itself got past every step that depth would have blocked, reaching
+   real work: cert generation, static pod manifest writing, kubelet
+   bring-up. It stalled only on `registry.k8s.io` being blocked by this
+   session's network egress policy (`Forbidden` on every image pull) —
+   a separate, orthogonal problem, worked around by locally tagging an
+   already-pulled Docker Hub image as `registry.k8s.io/pause:3.10.1`
+   (`ctr -n k8s.io images tag ...`) so no registry access was needed at
+   all. With that resolved, the decisive test became possible: **`ctr
+   run` (containerd's own CLI, the non-CRI path) created and ran a
+   container successfully at this exact host depth, while `crictl runp`
+   (the CRI `RunPodSandbox` call — the *same* path both `kind` and
+   `kubeadm`/kubelet use to start every pod) failed with the identical
+   `can't get final child's PID from pipe: EOF` error, reproduced twice
+   across a container restart.** A raw `unshare --pid --mount --uts
+   --ipc --fork --mount-proc` at this same depth also succeeds directly.
+   So every individual primitive (namespaces, `ctr run`'s own
+   runc-create sequence) works at this depth; only the CRI plugin's
+   specific `RunPodSandbox` sequence fails — **regardless of nesting
+   depth**, since this reproduces at the shallowest possible depth this
+   sandbox allows. The original "4 levels deep" explanation was wrong;
+   the real constraint is something inside containerd's CRI-specific
+   sandbox-creation path itself (its own particular ordering/interaction
+   of cgroup delegation, namespace setup, and the shim it launches),
+   which this Firecracker-microVM sandbox blocks independent of how many
+   container layers are involved.
 
 Given that, this environment runs the exact same container images
 directly under Docker instead of Kubernetes: still real, live,
 attackable and defensible infrastructure, just without `kubectl` in the
-loop. If you're running this on a host without that nesting
-restriction, `scripts/setup_aiopslab_dev.sh` plus a normal `kind create
-cluster` should work unmodified (with the `cgroupns-mode` fix above, if
-you hit the same first symptom).
+loop. **Corrected guidance for other hosts:** don't assume "fewer
+nesting layers" fixes this — the actual test above shows plain,
+non-CRI container creation (`docker run`, `ctr run`) works at any depth
+tried here, but *any* Kubernetes path (`kind`, `kubeadm`, `k3s`, a
+managed node) drives pods through the exact same CRI `RunPodSandbox`
+call this sandbox blocks. If you hit this same symptom elsewhere, first
+confirm with the same `ctr run` vs. `crictl runp` comparison above
+before assuming it's a depth problem; if it reproduces the same way, no
+depth adjustment will fix it — you need a host where the CRI sandbox
+path itself isn't restricted.
 
 ## Bringing it up
 

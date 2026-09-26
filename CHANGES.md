@@ -263,8 +263,18 @@ that need paid model access this project was explicitly told not to use.
   all are grounded in this project's own measurements.
 - **Kubernetes deployment status** — the abstract does not claim a live
   Kubernetes cluster, so no change is forced by the `docker-compose`
-  fallback (`live_env/README.md` documents the kind/kubeadm nesting-limit
-  diagnosis for anyone who asks why not).
+  fallback. `live_env/README.md` documents the full diagnosis for anyone
+  who asks why not, including a since-added correction: the original
+  "4-level container nesting" theory was directly tested (a `kubeadm`
+  cluster attempted straight against the host's own `containerd`, no
+  kind, one fewer layer than before) and refuted — `crictl runp` (the
+  CRI `RunPodSandbox` call every Kubernetes distribution uses to start
+  a pod) fails with the identical error at the *shallowest* depth this
+  sandbox allows, while plain `ctr run`/`docker run` and a raw `unshare`
+  with the same namespace set both succeed at that same depth. The real
+  constraint is inside containerd's CRI-specific sandbox-creation path
+  itself, not nesting depth — worth citing precisely if anyone asks
+  rather than repeating the superseded explanation.
 
 ## Figures
 
