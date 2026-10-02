@@ -21,13 +21,6 @@ a real 18-container live microservice deployment, and evaluated with a
 genuinely free, locally-run LLM via Ollama — **no paid API, no cloud
 account, anywhere in this repository's test path.**
 
-| | |
-|---|---|
-| **Status** | Working prototype, 4 mechanisms (provenance labeling, action-argument lineage, two-witness corroboration, claim-action licensing). 114/114 tests pass. CI on every push (`.github/workflows/tests.yml`). Plus a 313-trial deterministic security evaluation (`scripts/security_evaluation.py`): 0/153 attacks admitted (47 BLOCK, 106 HOLD), 135/135 benign remediations admitted, and a 30-trial licensing study showing mechanism 4 alone holds 30/30 "cheap-real-symptom" attacks the other three mechanisms admit. |
-| **Install** | `pip install -e .` — zero third-party dependencies for the core engine. |
-| **Try it in 60 seconds** | `witness-demo` — see [Quickstart](#quickstart). |
-| **License / authorship** | See [Authorship & AI-use disclosure](#authorship--ai-use-disclosure). |
-
 ## Table of contents
 
 - [The central invariant](#the-central-invariant)
@@ -57,8 +50,6 @@ account, anywhere in this repository's test path.**
 - [Troubleshooting](#troubleshooting)
 - [Limitations and honest scope](#limitations-and-honest-scope)
 - [Roadmap](#roadmap)
-- [Paper](#paper)
-- [Authorship & AI-use disclosure](#authorship--ai-use-disclosure)
 
 ## The central invariant
 
