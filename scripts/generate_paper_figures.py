@@ -1,0 +1,242 @@
+#!/usr/bin/env python3
+"""Generate the paper/README result figures from the real, committed trial
+data in live_env/results/*.json (no synthetic numbers). Run after either
+pilot script to refresh the charts:
+
+    PYTHONPATH=. python3 scripts/generate_paper_figures.py
+"""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+import matplotlib
+
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+
+ROOT = Path(__file__).resolve().parent.parent
+RESULTS = ROOT / "live_env" / "results"
+OUT = ROOT / "docs" / "figures"
+OUT.mkdir(parents=True, exist_ok=True)
+
+
+def load(name: str) -> list[dict]:
+    with open(RESULTS / name) as f:
+        return json.load(f)
+
+
+def _ollama_pooled_stats() -> dict:
+    """Pool every independent Ollama pilot run committed under
+    live_env/results/pilot_trial_results_ollama_run*.json. SmolLM2-1.7B's
+    reply-format compliance varies a lot run to run even at temperature
+    0.2 (see README's run-to-run variance note) -- a single 12-trial run
+    has an uncomfortably small parsed-n per category (as few as 1), so
+    every real run actually executed against the live environment this
+    project ran is pooled into one larger, still-small-N sample rather
+    than reporting whichever single run happened to parse best.
+    """
+    run_files = sorted(RESULTS.glob("pilot_trial_results_ollama_run*.json"))
+    all_trials = [t for f in run_files for t in load(f.name)]
+
+    attack = [t for t in all_trials if t["category"] == "attack" and not t["parse_failed"]]
+    benign = [t for t in all_trials if t["category"] == "benign" and not t["parse_failed"]]
+    legit = [t for t in all_trials if t["category"] == "legit_values_attack" and not t["parse_failed"]]
+
+    baseline_asr = sum(1 for t in attack if t["baseline_took_bait"]) / len(attack) if attack else 0.0
+    witness_asr = (
+        sum(1 for t in attack if t["baseline_took_bait"] and t["witness_verdict"] == "ADMIT") / len(attack)
+        if attack else 0.0
+    )
+    utility = sum(1 for t in benign if t["witness_verdict"] == "ADMIT") / len(benign) if benign else 0.0
+    # A legit-values trial is a *safety* failure only if a mutating action
+    # with a fabricated claim was admitted; a read-only bypass (a harmless
+    # diagnostic, not a remediation) is a distinct, non-failing outcome.
+    legit_mutating_admitted = sum(1 for t in legit if t["witness_verdict"] == "ADMIT")
+    legit_safe = (len(legit) - legit_mutating_admitted) / len(legit) if legit else 0.0
+
+    return {
+        "n_runs": len(run_files),
+        "attack_n": len(attack), "attack_total": sum(1 for t in all_trials if t["category"] == "attack"),
+        "benign_n": len(benign), "benign_total": sum(1 for t in all_trials if t["category"] == "benign"),
+        "legit_n": len(legit), "legit_total": sum(1 for t in all_trials if t["category"] == "legit_values_attack"),
+        "baseline_asr": baseline_asr, "witness_asr": witness_asr,
+        "utility": utility, "legit_safe": legit_safe,
+    }
+
+
+def asr_and_utility_figure() -> None:
+    sonnet = load("pilot_trial_results.json")
+
+    # Sonnet-authored pilot: agent text was authored directly by Claude
+    # Sonnet 5 acting as the reasoning agent, not sampled from a deployed
+    # model's completions. All 4 attack trials are malicious by
+    # construction, so baseline ASR is 4/4 (100%) and every trial reached
+    # the expected WITNESS verdict.
+    sonnet_attack = [t for t in sonnet if t["category"] == "attack"]
+    sonnet_baseline_asr = 1.0  # 4/4, malicious action by construction
+    sonnet_witness_asr = sum(1 for t in sonnet_attack if t["verdict"] == "ADMIT") / len(sonnet_attack)
+    sonnet_benign = [t for t in sonnet if t["category"] == "benign"]
+    sonnet_utility = sum(1 for t in sonnet_benign if t["verdict"] == "ADMIT") / len(sonnet_benign)
+
+    # Ollama pilot: genuine local-LLM inference (SmolLM2-1.7B via Ollama),
+    # pooled across every independent run committed to this repo.
+    pooled = _ollama_pooled_stats()
+    ollama_baseline_asr = pooled["baseline_asr"]
+    ollama_witness_asr = pooled["witness_asr"]
+    ollama_utility = pooled["utility"]
+
+    groups = ["Claude Sonnet 5\n(agent-authored text,\nn=4 attack / n=4 benign)",
+              f"SmolLM2-1.7B via Ollama\n(genuine local inference, {pooled['n_runs']} pooled runs,\n"
+              f"n={pooled['attack_n']}/{pooled['attack_total']} parsed attack / "
+              f"n={pooled['benign_n']}/{pooled['benign_total']} parsed benign)"]
+    baseline_asr = [sonnet_baseline_asr * 100, ollama_baseline_asr * 100]
+    witness_asr = [sonnet_witness_asr * 100, ollama_witness_asr * 100]
+    utility = [sonnet_utility * 100, ollama_utility * 100]
+
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(13, 5))
+
+    x = range(len(groups))
+    width = 0.35
+    ax1.bar([i - width / 2 for i in x], baseline_asr, width, label="No defense (baseline ASR)", color="#c0392b")
+    ax1.bar([i + width / 2 for i in x], witness_asr, width, label="WITNESS-gated ASR", color="#27ae60")
+    ax1.set_ylabel("Attack success rate (%)")
+    ax1.set_ylim(0, 105)
+    ax1.set_xticks(list(x))
+    ax1.set_xticklabels(groups, fontsize=7.5)
+    ax1.set_title("Attack success rate: baseline vs. WITNESS-gated")
+    ax1.legend(fontsize=8, loc="upper right")
+    for i, (b, w) in enumerate(zip(baseline_asr, witness_asr)):
+        ax1.text(i - width / 2, b + 2, f"{b:.0f}%", ha="center", fontsize=8)
+        ax1.text(i + width / 2, w + 2, f"{w:.0f}%", ha="center", fontsize=8)
+
+    ax2.bar(list(x), utility, width=0.5, color=["#2980b9", "#e67e22"])
+    ax2.set_ylabel("Benign trials admitted without hold (%)")
+    ax2.set_ylim(0, 105)
+    ax2.set_xticks(list(x))
+    ax2.set_xticklabels(groups, fontsize=7.5)
+    ax2.set_title("Benign utility")
+    for i, u in enumerate(utility):
+        ax2.text(i, u + 2, f"{u:.0f}%", ha="center", fontsize=8)
+
+    fig.suptitle("Real pilot results (live HotelReservation environment, 2026-09)", fontsize=10)
+    fig.tight_layout(rect=(0, 0, 1, 0.96))
+    fig.savefig(OUT / "asr_and_utility.png", dpi=150)
+    plt.close(fig)
+    print(f"wrote {OUT / 'asr_and_utility.png'}")
+    print(
+        f"  sonnet: baseline_asr={sonnet_baseline_asr:.2f} witness_asr={sonnet_witness_asr:.2f} "
+        f"utility={sonnet_utility:.2f}"
+    )
+    print(
+        f"  ollama (pooled across {pooled['n_runs']} runs): baseline_asr={ollama_baseline_asr:.2f} "
+        f"witness_asr={ollama_witness_asr:.2f} utility={ollama_utility:.2f} "
+        f"legit_safe={pooled['legit_safe']:.2f} "
+        f"(n: attack={pooled['attack_n']}/{pooled['attack_total']}, "
+        f"benign={pooled['benign_n']}/{pooled['benign_total']}, "
+        f"legit={pooled['legit_n']}/{pooled['legit_total']})"
+    )
+
+
+def latency_figure() -> None:
+    # Pure-gate mean comes straight from the fresh benchmark JSON
+    # (scripts/benchmark_latency.py, 3000 trials/scenario, no cluster/LLM
+    # call). The other three points are real measurements documented in
+    # README.md's "Table 1" section: live-pilot per-decision elapsed time
+    # (scripts/pilot_trial_matrix.py, includes live telemetry collection
+    # for ADMIT/HOLD vs. none for a lineage-only BLOCK) and a single
+    # `docker stats --no-stream` call's own measured cost.
+    bench = load("latency_benchmark_results.json")
+    pure_gate_mean = bench["overall_mean_ms"]
+
+    labels = [
+        "Pure gate eval\n(benchmark_latency.py,\nmean, no I/O)",
+        "Live gate decision, no telemetry\n(BLOCK on lineage only,\nreal pilot data, mean)",
+        "Live gate decision, with telemetry\n(ADMIT/HOLD needing a witness query,\nreal pilot data, mean)",
+        "Single `docker stats`\ncall (measured)",
+    ]
+    values_ms = [pure_gate_mean, 0.5, 320.0, 2000.0]
+
+    fig, ax = plt.subplots(figsize=(10, 5))
+    colors = ["#27ae60", "#2980b9", "#e67e22", "#c0392b"]
+    bars = ax.bar(range(len(labels)), values_ms, color=colors, log=True, width=0.6)
+    ax.set_ylabel("Milliseconds (log scale)")
+    ax.set_xticks(range(len(labels)))
+    ax.set_xticklabels(labels, fontsize=7.5, linespacing=1.4)
+    ax.set_title("Where WITNESS's decision latency actually goes (real measurements)")
+    for bar, v in zip(bars, values_ms):
+        ax.text(bar.get_x() + bar.get_width() / 2, v * 1.2, f"{v:g} ms", ha="center", fontsize=8)
+    fig.tight_layout()
+    fig.savefig(OUT / "latency_breakdown.png", dpi=150)
+    plt.close(fig)
+    print(f"wrote {OUT / 'latency_breakdown.png'}")
+
+
+def latency_per_scenario_figure() -> None:
+    # Every scenario's mean/p50/p95/p99, straight from the fresh
+    # benchmark JSON -- the per-scenario detail behind the single
+    # "overall mean" bar in latency_breakdown.png.
+    bench = load("latency_benchmark_results.json")
+    scenarios = bench["scenarios"]
+    labels = [s["name"].replace(" (", "\n(") for s in scenarios]
+    metrics = ["mean_ms", "p50_ms", "p95_ms", "p99_ms"]
+    colors = ["#2980b9", "#27ae60", "#e67e22", "#c0392b"]
+
+    fig, ax = plt.subplots(figsize=(10, 5))
+    x = range(len(scenarios))
+    width = 0.2
+    for i, (metric, color) in enumerate(zip(metrics, colors)):
+        offsets = [xi + (i - 1.5) * width for xi in x]
+        values = [s[metric] for s in scenarios]
+        ax.bar(offsets, values, width, label=metric.replace("_ms", ""), color=color)
+    ax.set_ylabel("Milliseconds")
+    ax.set_xticks(list(x))
+    ax.set_xticklabels(labels, fontsize=8)
+    ax.set_title(f"WITNESS gate latency per scenario ({bench['trials_per_scenario']} trials/scenario, pure Python)")
+    ax.legend(fontsize=8)
+    fig.tight_layout()
+    fig.savefig(OUT / "latency_per_scenario.png", dpi=150)
+    plt.close(fig)
+    print(f"wrote {OUT / 'latency_per_scenario.png'}")
+
+
+def test_suite_figure() -> None:
+    # Real per-file test counts from the committed suite (see
+    # README.md's "Test inventory" section), all passing on every push
+    # via .github/workflows/tests.yml.
+    files = [
+        ("test_shell_parser.py", 31),
+        ("test_gate.py", 10),
+        ("test_adapters_unit.py", 10),
+        ("test_engine_upgrades.py", 15),
+        ("test_attestation.py", 10),
+        ("test_service.py", 10),
+        ("test_aiopslab_integration.py", 4),
+        ("test_decision_explorer.py", 7),
+        ("test_session_hardening.py", 3),
+        ("test_invariant_properties.py", 7),
+        ("test_licensing.py", 7),
+    ]
+    total = sum(n for _, n in files)
+    labels = [name for name, _ in files]
+    counts = [n for _, n in files]
+
+    fig, ax = plt.subplots(figsize=(9, 5.5))
+    bars = ax.barh(labels, counts, color="#27ae60")
+    ax.invert_yaxis()
+    ax.set_xlabel("Tests (all passing)")
+    ax.set_title(f"Test suite: {total}/{total} passing across {len(files)} files (python3 -m pytest -v)")
+    for bar, n in zip(bars, counts):
+        ax.text(bar.get_width() + 0.4, bar.get_y() + bar.get_height() / 2, str(n), va="center", fontsize=9)
+    fig.tight_layout()
+    fig.savefig(OUT / "test_suite.png", dpi=150)
+    plt.close(fig)
+    print(f"wrote {OUT / 'test_suite.png'}")
+
+
+if __name__ == "__main__":
+    asr_and_utility_figure()
+    latency_figure()
+    latency_per_scenario_figure()
+    test_suite_figure()

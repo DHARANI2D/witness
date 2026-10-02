@@ -1,0 +1,127 @@
+version: "3.8"
+
+# Runs the REAL DeathStarBench HotelReservation application (the same
+# app AIOpsLab's orchestrator deploys via `kubectl apply -f
+# hotelReservation/kubernetes`) as plain Docker containers instead of on
+# a Kubernetes cluster. Service names below match the k8s Service names
+# exactly (verified against the vendored k8s manifests in
+# aiopslab-applications/hotelReservation/kubernetes), so the app's
+# baked-in config.json -- which points at hostnames like "consul",
+# "mongodb-rate", "memcached-reserve" -- resolves correctly over
+# Compose's default network without any image changes.
+#
+# This exists because this sandbox's Docker-in-Docker nesting can't run
+# a kind/kubeadm control plane (see README.md "Why docker-compose, not
+# kind" for the diagnosis). It is a real, live, running distributed
+# system with real container telemetry and real fault injection -- just
+# not through kubectl.
+
+services:
+  consul:
+    image: hashicorp/consul:latest
+    container_name: hotel-consul
+
+  jaeger:
+    image: jaegertracing/all-in-one:1.57
+    container_name: hotel-jaeger
+
+  mongodb-geo:
+    image: mongo:4.4.6
+    container_name: hotel-mongodb-geo
+    command: ["--auth"]
+    volumes:
+      - ./mongo-init/geo:/docker-entrypoint-initdb.d
+  mongodb-profile:
+    image: mongo:4.4.6
+    container_name: hotel-mongodb-profile
+  mongodb-rate:
+    image: mongo:4.4.6
+    container_name: hotel-mongodb-rate
+    command: ["--auth"]
+    volumes:
+      - ./mongo-init/rate:/docker-entrypoint-initdb.d
+  mongodb-recommendation:
+    image: mongo:4.4.6
+    container_name: hotel-mongodb-recommendation
+  mongodb-reservation:
+    image: mongo:4.4.6
+    container_name: hotel-mongodb-reservation
+  mongodb-user:
+    image: mongo:4.4.6
+    container_name: hotel-mongodb-user
+
+  memcached-profile:
+    image: memcached
+    container_name: hotel-memcached-profile
+  memcached-rate:
+    image: memcached
+    container_name: hotel-memcached-rate
+  memcached-reserve:
+    image: memcached
+    container_name: hotel-memcached-reserve
+
+  geo:
+    image: yinfangchen/hotelreservation:latest
+    container_name: hotel-geo
+    command: ["geo"]
+    environment:
+      - JAEGER_SAMPLE_RATIO=1
+    depends_on: [consul, jaeger, mongodb-geo]
+
+  profile:
+    image: yinfangchen/hotelreservation:latest
+    container_name: hotel-profile
+    command: ["profile"]
+    environment:
+      - JAEGER_SAMPLE_RATIO=1
+    depends_on: [consul, jaeger, mongodb-profile, memcached-profile]
+
+  rate:
+    image: yinfangchen/hotelreservation:latest
+    container_name: hotel-rate
+    command: ["rate"]
+    environment:
+      - JAEGER_SAMPLE_RATIO=1
+    depends_on: [consul, jaeger, mongodb-rate, memcached-rate]
+
+  recommendation:
+    image: yinfangchen/hotelreservation:latest
+    container_name: hotel-recommendation
+    command: ["recommendation"]
+    environment:
+      - JAEGER_SAMPLE_RATIO=1
+    depends_on: [consul, jaeger, mongodb-recommendation]
+
+  reservation:
+    image: yinfangchen/hotelreservation:latest
+    container_name: hotel-reservation
+    command: ["reservation"]
+    environment:
+      - JAEGER_SAMPLE_RATIO=1
+    depends_on: [consul, jaeger, mongodb-reservation, memcached-reserve]
+
+  search:
+    image: yinfangchen/hotelreservation:latest
+    container_name: hotel-search
+    command: ["search"]
+    environment:
+      - JAEGER_SAMPLE_RATIO=1
+    depends_on: [consul, jaeger, geo, rate]
+
+  user:
+    image: yinfangchen/hotelreservation:latest
+    container_name: hotel-user
+    command: ["user"]
+    environment:
+      - JAEGER_SAMPLE_RATIO=1
+    depends_on: [consul, jaeger, mongodb-user]
+
+  frontend:
+    image: yinfangchen/hotelreservation:latest
+    container_name: hotel-frontend
+    command: ["frontend"]
+    environment:
+      - JAEGER_SAMPLE_RATIO=1
+    ports:
+      - "5000:5000"
+    depends_on: [consul, jaeger, profile, search, recommendation, user, reservation]

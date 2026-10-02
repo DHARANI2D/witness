@@ -1,0 +1,29 @@
+# Runs the WITNESS admission-gate service standalone (see service/app.py
+# and Dockerfile). This is separate from live_env/docker-compose.yml,
+# which stands up the AIOpsLab HotelReservation testbed WITNESS gates --
+# two different things with the word "compose" in common: this file is
+# for deploying the gate itself; live_env/ is for exercising it against
+# a real application.
+#
+# Usage:
+#   cp .env.example .env   # set a real WITNESS_SERVICE_API_KEY
+#   docker compose up --build
+
+services:
+  witness-gate:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      # Required for anything beyond local development -- see
+      # service/app.py's module docstring. Set via a real secret
+      # manager in production, not a checked-in .env file.
+      WITNESS_SERVICE_API_KEY: "${WITNESS_SERVICE_API_KEY:?set WITNESS_SERVICE_API_KEY, e.g. in a .env file}"
+      WITNESS_ATTESTATION_KEY: "${WITNESS_ATTESTATION_KEY:-}"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/healthz', timeout=2)"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 5s

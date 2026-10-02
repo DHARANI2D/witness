@@ -1,0 +1,20 @@
+# The K (trusted knowledge) channel: approved repositories, package
+# pins, and accounts a real deployment's CMDB/runbook/IAM directory
+# would maintain. WITNESS treats a literal found here as trusted lineage
+# exactly like a SYS-typed telemetry event -- this file stands in for
+# that system of record.
+
+approved_repositories:
+  - ppa:nginx/stable
+  - ppa:deadsnakes/ppa
+
+approved_package_pins:
+  - nginx=1.24.0-1
+  - mysql-server=8.0.35-1
+
+known_admin_accounts:
+  - alice
+  - bob
+
+golden_config_values:
+  - ssl_protocols TLSv1.2 TLSv1.3

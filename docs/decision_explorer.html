@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WITNESS decision explorer</title>
+<style>
+  :root {
+    --bg: #f7f8fa; --panel: #ffffff; --text: #1a1d23; --muted: #5b6472;
+    --border: #e2e5ea; --admit: #1a7f4b; --admit-bg: #e6f6ee;
+    --hold: #a05a00; --hold-bg: #fdf1de; --block: #b3261e; --block-bg: #fdeaea;
+    --accent: #2f5fda; --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #14161a; --panel: #1c1f25; --text: #e7e9ee; --muted: #9aa3b2;
+      --border: #2b2f38; --admit: #4ade9a; --admit-bg: #113526;
+      --hold: #f2b155; --hold-bg: #3a2a10; --block: #ff8f87; --block-bg: #3a1414;
+      --accent: #7ea2ff;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #14161a; --panel: #1c1f25; --text: #e7e9ee; --muted: #9aa3b2;
+    --border: #2b2f38; --admit: #4ade9a; --admit-bg: #113526;
+    --hold: #f2b155; --hold-bg: #3a2a10; --block: #ff8f87; --block-bg: #3a1414;
+    --accent: #7ea2ff;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+    font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+  header { padding: 20px 20px 12px; border-bottom: 1px solid var(--border); background: var(--panel); }
+  header h1 { margin: 0 0 4px; font-size: 19px; }
+  header p { margin: 0; color: var(--muted); font-size: 13px; }
+  .stats { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
+  .stat { border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; background: var(--bg); font-size: 13px; }
+  .stat b { font-size: 16px; display: block; }
+  .chain-ok { color: var(--admit); } .chain-bad { color: var(--block); }
+  .controls { display: flex; gap: 8px; flex-wrap: wrap; padding: 14px 20px; background: var(--panel);
+    border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 5; }
+  .controls input[type=search] { flex: 1; min-width: 200px; padding: 8px 10px; border-radius: 8px;
+    border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size: 14px; }
+  .chip { border: 1px solid var(--border); background: var(--bg); color: var(--text);
+    border-radius: 999px; padding: 6px 12px; font-size: 13px; cursor: pointer; user-select: none; }
+  .chip[data-active="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
+  main { padding: 16px 20px 60px; max-width: 980px; margin: 0 auto; }
+  .cert { border: 1px solid var(--border); border-radius: 10px; margin-bottom: 10px; background: var(--panel);
+    overflow: hidden; }
+  .cert summary { list-style: none; cursor: pointer; padding: 12px 14px; display: flex; align-items: center;
+    gap: 10px; }
+  .cert summary::-webkit-details-marker { display: none; }
+  .badge { font-weight: 600; font-size: 12px; border-radius: 6px; padding: 3px 9px; white-space: nowrap; }
+  .badge.ADMIT { color: var(--admit); background: var(--admit-bg); }
+  .badge.HOLD { color: var(--hold); background: var(--hold-bg); }
+  .badge.BLOCK { color: var(--block); background: var(--block-bg); }
+  .cert summary .incident { font-family: var(--mono); font-size: 13px; flex: 1; overflow: hidden;
+    text-overflow: ellipsis; white-space: nowrap; }
+  .cert summary .ts { color: var(--muted); font-size: 12px; white-space: nowrap; }
+  .cert-body { padding: 0 14px 14px; border-top: 1px solid var(--border); }
+  .cert-body h4 { margin: 12px 0 6px; font-size: 12px; text-transform: uppercase; letter-spacing: .04em;
+    color: var(--muted); }
+  .reasons { margin: 0; padding-left: 18px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 5px 8px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { color: var(--muted); font-weight: 500; }
+  code, .mono { font-family: var(--mono); font-size: 12px; }
+  .hash { color: var(--muted); }
+  .empty { text-align: center; color: var(--muted); padding: 40px 0; }
+  footer { text-align: center; color: var(--muted); font-size: 12px; padding: 20px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>WITNESS decision explorer</h1>
+  <p>Every entry below is the real, unedited output of <code>EvidenceCertificate.to_dict()</code> -- static, offline, no model in the loop. Generated 2026-09-27 16:42 UTC.</p>
+  <div class="stats">
+    <div class="stat"><b>7</b>decisions</div>
+    <div class="stat"><b class="badge ADMIT">2</b>ADMIT</div>
+    <div class="stat"><b class="badge HOLD">3</b>HOLD</div>
+    <div class="stat"><b class="badge BLOCK">2</b>BLOCK</div>
+    <div class="stat">Chain linkage: <b class="chain-ok">intact</b></div>
+  </div>
+</header>
+<div class="controls">
+  <input type="search" id="search" placeholder="Search incident id, reason, literal, predicate...">
+  <button class="chip" data-verdict="ADMIT">ADMIT</button>
+  <button class="chip" data-verdict="HOLD">HOLD</button>
+  <button class="chip" data-verdict="BLOCK">BLOCK</button>
+</div>
+<main id="main"></main>
+<footer>witness_core -- corroboration, not attribution. Generated by scripts/generate_decision_explorer.py</footer>
+<script>
+const CERTS = [{"incident_id": "INC-1001-nginx-404", "verdict": "BLOCK", "claims": [{"predicate": "error_rate_elevated", "subject": "nginx", "value": "true", "status": "CORROBORATED", "confidence": 1.0, "witness_channel_ids": ["prometheus:http_404_rate"], "witness_channel_classes": ["prometheus"], "note": ""}, {"predicate": "protocol_unsupported", "subject": "nginx", "value": "TLS1.3", "status": "NOT_CORROBORATED", "confidence": 0.0, "witness_channel_ids": [], "witness_channel_classes": [], "note": "found 0/2 independent-class SYS witness(es)"}], "lineage": [{"literal": "ppa:ngx/latest", "lineage": "ATTACKER_SOURCED", "supporting_channel_ids": ["nginx_access_log:referer"], "fuzzy": false, "fuzzy_ratio": null}], "reasons": ["argument 'ppa:ngx/latest' has EXT-only provenance (attacker-sourced)"], "prev_hash": "0000000000000000000000000000000000000000000000000000000000000000", "timestamp": 1790527328.5855672, "certificate_hash": "4cdffe3a0a62026c44879cbae979c94789e111f989dfcc3a20a2520eecbd5cf6"}, {"incident_id": "INC-1002-cpu-saturation", "verdict": "ADMIT", "claims": [{"predicate": "cpu_saturated", "subject": "checkout-service", "value": "true", "status": "CORROBORATED", "confidence": 1.0, "witness_channel_ids": ["cadvisor:container_cpu_pct", "node_exporter:host_cpu_pct"], "witness_channel_classes": ["cadvisor", "node_exporter"], "note": ""}], "lineage": [{"literal": "checkout-service", "lineage": "TRUSTED", "supporting_channel_ids": ["k8s_api:pod_labels"], "fuzzy": false, "fuzzy_ratio": null}], "reasons": ["all load-bearing claims corroborated; all arguments trusted"], "prev_hash": "4cdffe3a0a62026c44879cbae979c94789e111f989dfcc3a20a2520eecbd5cf6", "timestamp": 1790527328.5857525, "certificate_hash": "e4d378731f54d0664b340b544f5c5271f89ddca8b57b947939171ec9ca1e7094"}, {"incident_id": "INC-1003-admin-lockout", "verdict": "HOLD", "claims": [{"predicate": "session_from_new_geo", "subject": "alice", "value": "true", "status": "NOT_CORROBORATED", "confidence": 0.0, "witness_channel_ids": [], "witness_channel_classes": [], "note": "found 0/1 independent-class SYS witness(es)"}], "lineage": [{"literal": "alice", "lineage": "TRUSTED", "supporting_channel_ids": ["iam_directory:known_admins"], "fuzzy": false, "fuzzy_ratio": null}], "reasons": ["claim session_from_new_geo(alice=true) is not_corroborated, confidence=0.00 (found 0/1 independent-class SYS witness(es))"], "prev_hash": "e4d378731f54d0664b340b544f5c5271f89ddca8b57b947939171ec9ca1e7094", "timestamp": 1790527328.5858448, "certificate_hash": "7f001c60f7c597675ff50ec1b1a5ba9927855bc653467562eb653542d83bd917"}, {"incident_id": "INC-1004-partial-truth", "verdict": "BLOCK", "claims": [{"predicate": "cpu_saturated", "subject": "checkout-service", "value": "true", "status": "CORROBORATED", "confidence": 1.0, "witness_channel_ids": ["cadvisor:container_cpu_pct", "node_exporter:host_cpu_pct"], "witness_channel_classes": ["cadvisor", "node_exporter"], "note": ""}], "lineage": [{"literal": "ppa:ckt-fix/unverified", "lineage": "ATTACKER_SOURCED", "supporting_channel_ids": ["siem_alert:free_text"], "fuzzy": false, "fuzzy_ratio": null}], "reasons": ["argument 'ppa:ckt-fix/unverified' has EXT-only provenance (attacker-sourced)"], "prev_hash": "7f001c60f7c597675ff50ec1b1a5ba9927855bc653467562eb653542d83bd917", "timestamp": 1790527328.5859382, "certificate_hash": "b9cb18e771e0df0491540c21ad5a47d54dab01e50bbfd53a141546349f52b29c"}, {"incident_id": "INC-DEMO-dependency-collision", "verdict": "HOLD", "claims": [{"predicate": "cpu_saturated", "subject": "demo-svc", "value": "true", "status": "NOT_CORROBORATED", "confidence": 0.5, "witness_channel_ids": ["docker_stats:cpu_pct"], "witness_channel_classes": ["docker_stats"], "note": "found 1/2 independent-class SYS witness(es); rejected 1 candidate(s) sharing a declared dependency_id with an already-counted witness or the claim's own source"}], "lineage": [{"literal": "demo-svc", "lineage": "UNKNOWN", "supporting_channel_ids": [], "fuzzy": false, "fuzzy_ratio": null}], "reasons": ["argument 'demo-svc' has no lineage in K/SYS/EXT (model-invented)", "claim cpu_saturated(demo-svc=true) is not_corroborated, confidence=0.50 (found 1/2 independent-class SYS witness(es); rejected 1 candidate(s) sharing a declared dependency_id with an already-counted witness or the claim's own source)"], "prev_hash": "b9cb18e771e0df0491540c21ad5a47d54dab01e50bbfd53a141546349f52b29c", "timestamp": 1790527328.5869513, "certificate_hash": "5382c51e566f0c540969a085804ee120a22a3c0871cfc11131efa7198cfbd0c8"}, {"incident_id": "INC-DEMO-stale-replay", "verdict": "HOLD", "claims": [{"predicate": "protocol_unsupported", "subject": "demo-svc", "value": "TLS1.0", "status": "NOT_CORROBORATED", "confidence": 0.0, "witness_channel_ids": [], "witness_channel_classes": [], "note": "found 0/2 independent-class SYS witness(es)"}], "lineage": [{"literal": "ssl_protocols TLSv1.2 TLSv1.3", "lineage": "UNKNOWN", "supporting_channel_ids": [], "fuzzy": false, "fuzzy_ratio": null}], "reasons": ["argument 'ssl_protocols TLSv1.2 TLSv1.3' has no lineage in K/SYS/EXT (model-invented)", "claim protocol_unsupported(demo-svc=TLS1.0) is not_corroborated, confidence=0.00 (found 0/2 independent-class SYS witness(es))"], "prev_hash": "5382c51e566f0c540969a085804ee120a22a3c0871cfc11131efa7198cfbd0c8", "timestamp": 1790527328.5871148, "certificate_hash": "de2c04e6b26999ab5ce4c9ae3d7ff92314bba977f65cf9705668bcaa7b478e92"}, {"incident_id": "INC-DEMO-legit-repo-add", "verdict": "ADMIT", "claims": [{"predicate": "error_rate_elevated", "subject": "demo-svc", "value": "true", "status": "CORROBORATED", "confidence": 1.0, "witness_channel_ids": ["prometheus:http_404_rate_per_min"], "witness_channel_classes": ["prometheus"], "note": ""}], "lineage": [{"literal": "ppa:nginx/stable", "lineage": "TRUSTED", "supporting_channel_ids": ["golden_config:approved_repositories"], "fuzzy": false, "fuzzy_ratio": null}], "reasons": ["all load-bearing claims corroborated; all arguments trusted"], "prev_hash": "de2c04e6b26999ab5ce4c9ae3d7ff92314bba977f65cf9705668bcaa7b478e92", "timestamp": 1790527328.5871997, "certificate_hash": "4b3a0693619c93c605ac2196a193185cf4f14f1b2e1e91fdbe6326b9e759cb3e"}];
+
+function esc(s) {
+  const d = document.createElement('div'); d.textContent = String(s); return d.innerHTML;
+}
+
+function renderCert(c) {
+  const claimsRows = (c.claims || []).map(r => `
+    <tr>
+      <td class="mono">${esc(r.predicate)}(${esc(r.subject)}=${esc(r.value)})</td>
+      <td><span class="badge ${r.status === 'CORROBORATED' ? 'ADMIT' : (r.status === 'NO_WITNESS_DEFINED' ? 'BLOCK' : 'HOLD')}">${esc(r.status)}</span></td>
+      <td>${r.confidence}</td>
+      <td class="mono">${(r.witness_channel_classes || []).join(', ') || '—'}</td>
+      <td>${esc(r.note || '')}</td>
+    </tr>`).join('');
+  const lineageRows = (c.lineage || []).map(r => `
+    <tr>
+      <td class="mono">${esc(r.literal)}</td>
+      <td><span class="badge ${r.lineage === 'TRUSTED' ? 'ADMIT' : (r.lineage === 'ATTACKER_SOURCED' ? 'BLOCK' : 'HOLD')}">${esc(r.lineage)}</span></td>
+      <td class="mono">${(r.supporting_channel_ids || []).join(', ') || '—'}</td>
+      <td>${r.fuzzy ? `fuzzy (ratio=${r.fuzzy_ratio})` : ''}</td>
+    </tr>`).join('');
+  const reasons = (c.reasons || []).map(r => `<li>${esc(r)}</li>`).join('');
+
+  return `
+  <details class="cert" data-verdict="${c.verdict}"
+    data-search="${esc((c.incident_id + ' ' + (c.reasons||[]).join(' ') + ' ' +
+      (c.claims||[]).map(x=>x.predicate).join(' ') + ' ' +
+      (c.lineage||[]).map(x=>x.literal).join(' ')).toLowerCase())}">
+    <summary>
+      <span class="badge ${c.verdict}">${c.verdict}</span>
+      <span class="incident">${esc(c.incident_id)}</span>
+      <span class="ts">${new Date(c.timestamp * 1000).toISOString()}</span>
+    </summary>
+    <div class="cert-body">
+      <h4>Reasons</h4>
+      <ul class="reasons">${reasons || '<li>(none recorded)</li>'}</ul>
+      ${claimsRows ? `<h4>Claim corroboration</h4><table><tr><th>Claim</th><th>Status</th><th>Confidence</th><th>Witness classes</th><th>Note</th></tr>${claimsRows}</table>` : ''}
+      ${lineageRows ? `<h4>Argument lineage</h4><table><tr><th>Literal</th><th>Lineage</th><th>Supporting channels</th><th></th></tr>${lineageRows}</table>` : ''}
+      <h4>Certificate</h4>
+      <table>
+        <tr><th>Hash</th><td class="mono hash">${esc(c.certificate_hash)}</td></tr>
+        <tr><th>Prev hash</th><td class="mono hash">${esc(c.prev_hash)}</td></tr>
+      </table>
+    </div>
+  </details>`;
+}
+
+const main = document.getElementById('main');
+const search = document.getElementById('search');
+const chips = Array.from(document.querySelectorAll('.chip'));
+let activeVerdicts = new Set();
+
+function draw() {
+  const q = search.value.trim().toLowerCase();
+  const html = CERTS
+    .filter(c => activeVerdicts.size === 0 || activeVerdicts.has(c.verdict))
+    .filter(c => !q || (c.incident_id + ' ' + (c.reasons||[]).join(' ')).toLowerCase().includes(q)
+      || (c.claims||[]).some(x => x.predicate.toLowerCase().includes(q))
+      || (c.lineage||[]).some(x => String(x.literal).toLowerCase().includes(q)))
+    .map(renderCert).join('');
+  main.innerHTML = html || '<p class="empty">No decisions match this filter.</p>';
+}
+
+search.addEventListener('input', draw);
+chips.forEach(chip => chip.addEventListener('click', () => {
+  const v = chip.dataset.verdict;
+  if (activeVerdicts.has(v)) { activeVerdicts.delete(v); chip.dataset.active = 'false'; }
+  else { activeVerdicts.add(v); chip.dataset.active = 'true'; }
+  draw();
+}));
+
+draw();
+</script>
+</body>
+</html>
